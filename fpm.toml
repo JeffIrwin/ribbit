@@ -1,0 +1,38 @@
+name = "ribbit"
+license = "BSD 3-Clause"
+author = "Jeff Irwin"
+
+## TODO: best practices for duplicating version here and in src?
+#version = "0.0.27"
+
+## Am I prepared to dox myself?
+#maintainer = "jane.doe@example.com"
+#copyright = "Copyright 2021, Jane Doe"
+
+description = "ribbit is a basic rigid-body dynamics engine"
+categories = ["interpreter"]
+homepage = "https://github.com/JeffIrwin/ribbit"
+
+# TODO: set compiler flags, like -Wno-tab, etc.  Probably best done in a build
+# script which sets --flag (or FPM_FFLAGS env var, but that should probably be
+# left to other users to override my --flag args)
+
+[build]
+auto-executables = true
+auto-tests       = true
+auto-examples    = true
+module-naming    = true
+
+[install]
+library = false
+
+[[executable]]
+name = "ribbit"
+source-dir = "src"
+main = "main.f90"
+
+#[[test]]
+#name = "test"
+#source-dir = "src/tests/"
+#main = "test.f90"
+

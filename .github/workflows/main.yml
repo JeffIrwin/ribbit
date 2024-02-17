@@ -1,0 +1,49 @@
+
+name: CI
+
+on: [push]
+
+jobs:
+
+  test-os:
+
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+
+      # Having multiple matrices (e.g. os *and* gfortran) will test every
+      # possible combination of those two matrices!
+      matrix:
+        os: [ubuntu-latest]
+        #os: [ubuntu-latest, macOS-latest]
+        #os: [ubuntu-latest, windows-latest, macOS-latest]
+
+    steps:
+
+    - uses: actions/checkout@v1
+    - uses: fortran-lang/setup-fpm@v5
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    #- if: matrix.os == 'ubuntu-latest'
+    #  name: Set ubuntu PATH
+    #  run: |
+    #    echo "$HOME/bin" >> $GITHUB_PATH
+
+    - if: matrix.os == 'ubuntu-latest'
+      name: Test fpm default
+      env:
+        FPM_FC: gfortran-12
+      run: |
+        fpm build --profile debug
+        fpm build --profile release
+
+    #- if: matrix.os == 'ubuntu-latest'
+    #  run: |
+    #    sudo apt-get install gfortran
+
+    #- if: matrix.os == 'macOS-latest'
+    #  run: |
+    #    brew install gcc@12
+    #    brew reinstall gcc@12
+
