@@ -21,10 +21,14 @@ homepage = "https://github.com/JeffIrwin/ribbit"
 auto-executables = true
 auto-tests       = true
 auto-examples    = true
-module-naming    = true
+#module-naming    = true
 
 [install]
 library = false
+
+[dependencies]
+json-fortran.git = "https://github.com/JeffIrwin/json-fortran"
+json-fortran.rev = "18ef4c60493b7b9fbf41b48bb8e3970e59b57b53"
 
 [[executable]]
 name = "ribbit"
