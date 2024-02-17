@@ -31,12 +31,12 @@ jobs:
     #    echo "$HOME/bin" >> $GITHUB_PATH
 
     - if: matrix.os == 'ubuntu-latest'
-      name: Test fpm default
+      name: Run fpm default
       env:
         FPM_FC: gfortran-12
       run: |
-        fpm build --profile debug
-        fpm build --profile release
+        fpm run --profile debug
+        fpm run --profile release
 
     #- if: matrix.os == 'ubuntu-latest'
     #  run: |
