@@ -8,6 +8,10 @@ module ribbit
 
 	integer, parameter :: ND = 3
 
+	integer, parameter :: &
+		ERR_JSON_SYNTAX = -1, &
+		ERR_LOAD_JSON   = -2
+
 	!********
 
 	type body_t
@@ -45,14 +49,16 @@ subroutine ribbit_main()
 
 	double precision :: p0(ND), v0(ND)
 
-	integer :: ib, i
+	character(len = :), allocatable :: filename
+
+	integer :: ib, i, io
 	integer :: fid
 
 	logical :: found
 
 	type(json_file) :: json
-	type(json_core) :: core
-	type(json_value), pointer :: p !! a pointer for low-level manipulations
+	!type(json_core) :: core
+	!type(json_value), pointer :: p !! a pointer for low-level manipulations
 
 	type(body_t)  :: b
 	type(world_t) :: w
@@ -79,21 +85,38 @@ subroutine ribbit_main()
 
 	! read the file
 	!call json%load(filename = '../files/inputs/test1.json')
-	call json%load(filename = "./inputs/bouncy-ball.ribbit")
+	filename = "./inputs/bouncy-ball.ribbit"
+	call json%load(filename = filename)
+	if (json%failed()) then
+		write(*,*) 'Error:'
+		write(*,*) 'Could not load file "'//filename//'"'
+		write(*,*)
+		call json%print_error_message()
+		write(*,*)
+		io = ERR_LOAD_JSON
+		! TODO: make function and use io as return val
+		return
+	end if
+
+	! One number per line in arrays.  Not great for template matrix
+	call json%print()
+
+	call json%traverse(traverse_ribbit_json)
+	if (io /= 0) return
 
 	!! print the file to the console
 	!call json%print()
 
-	call core%initialize()
-	call json%get(p) ! get root
+	!call core%initialize()
+	!call json%get(p) ! get root
 
-	call core%initialize(unescape_strings=.false., compact_reals=.true., &
-		real_format='*')
-	!call core%traverse(p, traverser)
-	!call core%world_traverse(p, w)
+	!call core%initialize(unescape_strings=.false., compact_reals=.true., &
+	!	real_format='*')
+	!!call core%traverse(p, traverser)
+	!!call core%world_traverse(p, w)
 
 	!call core%world_traverse(p)
-	call world_traverse(core, p, w)
+	!call world_traverse(core, p, w)
 
 	!! extract data from the file
 	!! [found can be used to check if the data was really there]
@@ -135,6 +158,83 @@ subroutine ribbit_main()
 	end do
 
 	write(*,*) "ending ribbit_main()"
+
+contains
+
+!===============================================================================
+
+subroutine traverse_ribbit_json(json, p, finished)
+
+	! Based on the traverser here:
+	!
+	!     https://github.com/jacobwilliams/json-fortran/issues/204
+	!
+
+	!use json_module
+
+	class(json_core), intent(inout)       :: json
+	type(json_value), pointer, intent(in) :: p
+	logical(json_LK), intent(out)         :: finished
+
+	!********
+
+	character(kind=json_CK, len=:), allocatable :: key, sval
+
+	integer(json_IK) :: ival, ncount, ij
+	integer, allocatable :: template(:), t2(:,:)
+
+	logical(json_LK) :: found
+
+	!real(json_RK) :: rvalx, rvaly
+	!type(json_value), pointer :: pc
+
+	! Get the name of the key and the type of its value
+	call json%info(p, name = key)
+
+	!print *, 'key = "'//key//'"'
+
+	if (key == "world") then
+
+		print *, 'found world'
+		!! Colormap file
+		!call json%get(p, '@', s%fcolormap)
+
+	!else if (key == colormap_id) then
+	!	! Colormap name
+	!	call json%get(p, '@', s%colormap)
+
+	!else if (key /= "" .and. key /= s%fjson) then
+	else if (key /= "") then
+
+		! TODO: consider making this an error, unless running with a "loose
+		! syntax" cmd arg.  Same idea for unknown cmd args.  Allowing unknown
+		! keys is good for future compatibility but bad for users who might make
+		! typos.
+
+		write(*,*) 'Warning:  unknown JSON key'
+		write(*,*) 'Key    :"'//key//'"'
+		write(*,*)
+
+	end if
+
+	if (json%failed()) then
+
+		write(*,*) 'Error:'
+		write(*,*) 'Could not load file "'//filename//'"'
+		write(*,*)
+		call json%print_error_message()
+		write(*,*)
+		finished = .true.
+		io = ERR_JSON_SYNTAX
+
+	end if
+
+	! always false, since we want to traverse all nodes:
+	finished = .false.
+
+end subroutine traverse_ribbit_json
+
+!===============================================================================
 
 end subroutine ribbit_main
 
