@@ -81,7 +81,10 @@ subroutine ribbit_main()
 	call json%initialize()
 
 	! read the file
+
 	filename = "./inputs/bouncy-ball.ribbit"
+	filename = "./inputs/bouncy-balls.ribbit"
+
 	call json%load(filename = filename)
 	if (json%failed()) then
 		write(*,*) "Error:"
@@ -100,13 +103,16 @@ subroutine ribbit_main()
 	call json%traverse(traverse_world)
 	if (io /= 0) return
 
+	!! TODO
+	!return
+
 	open(newunit = fid, file = "dump2.csv")
 
 	w%t = w%t_start
 	do while (w%t <= w%t_end)
 
 		print *, "t, z = ", w%t, w%bodies(1)%pos(3)
-		write(fid, *) w%t, w%bodies(1)%pos(3)
+		write(fid, *) w%t, w%bodies(1)%pos(3), w%bodies(2)%pos(3)
 
 		do ib = 1, size(w%bodies)
 			b = w%bodies(ib)
@@ -154,13 +160,13 @@ subroutine traverse_world(json, p, finished)
 
 	character(kind=json_CK, len=:), allocatable :: key, sval, path
 
-	integer(json_IK) :: ival, count_, i, index_
+	integer(json_IK) :: ival, count_, count_gc, i, igc, index_
 	integer, allocatable :: template(:), t2(:,:)
 
 	logical(json_LK) :: found
 
 	type(json_core) :: core
-	type(json_value), pointer :: pc, pp
+	type(json_value), pointer :: pc, pp, pgc
 
 	! Get the name of the key and the type of its value
 	call json%info(p, name = key)
@@ -190,18 +196,8 @@ subroutine traverse_world(json, p, finished)
 		print *, "w%t_end = ", w%t_end
 
 	else if (path == "world.grav_accel") then
-		count_ = json%count(p)
-		if (count_ /= ND) then
-			write(*,*) "Error:"
-			write(*,*) "grav_accel must have 3 components"
-			finished = .true.
-			io = ERR_JSON_SYNTAX
-		end if
 
-		do i = 1, count_
-			call json%get_child(p, i, pc, found)
-			call json%get(pc, "@", w%grav_accel(i))
-		end do
+		w%grav_accel = get_array(json, p, ND)
 		print *, "grav_accel = ", w%grav_accel
 
 	else if (path == "world.bodies") then
@@ -210,25 +206,43 @@ subroutine traverse_world(json, p, finished)
 		allocate(w%bodies(count_))
 
 		do ib = 1, count_
-			call json%get_child(p, ib, pc, found)
+			call json%get_child(p, ib, pc)
 
-			!call json%traverse(traverse_world)
-			!call p%traverse(traverse_body)
+			print *, "traversing body ", ib
+			print *, "{"
 
-			print *, 'traversing body ', ib
-			print *, '{'
-			print *, '{'
-			print *, '{'
-			call core%initialize()
-			call core%traverse(pc, traverse_body)
-			print *, '}'
-			print *, '}'
-			print *, '}'
-			print *, 'done'
-			print *, ''
+			! "grandchildren" count
+			count_gc = json%count(pc)
+			print *, "count_gc = ", count_gc
 
-			!p = pc
-			!p => pc
+			do igc = 1, count_gc
+				call json%get_child(pc, igc, pgc)
+				call json%info(pgc, name = key)
+
+				select case (key)
+
+				case ("pos")
+					w%bodies(ib)%pos = get_array(json, pgc, ND)
+					print *, "w%bodies(ib)%pos", w%bodies(ib)%pos
+
+				case ("vel")
+					w%bodies(ib)%vel = get_array(json, pgc, ND)
+					print *, "w%bodies(ib)%vel", w%bodies(ib)%vel
+
+				case ("coef_rest")
+					call json%get(pgc, "@", w%bodies(ib)%coef_rest)
+
+				case default
+					! TODO
+					print *, "bad key ", key
+
+				end select
+
+			end do
+
+			print *, "}"
+			print *, "done"
+			print *, ""
 
 		end do
 
@@ -269,125 +283,40 @@ end subroutine traverse_world
 
 !===============================================================================
 
-subroutine traverse_body(json, p, finished)
-
-	class(json_core), intent(inout)       :: json
-	type(json_value), pointer, intent(in) :: p
-	logical(json_LK), intent(out)         :: finished
-
-	!********
-
-	character(kind=json_CK, len=:), allocatable :: key, sval, path, gpath
-
-	integer(json_IK) :: ival, count_, i, index_
-	integer, allocatable :: template(:), t2(:,:)
-
-	logical(json_LK) :: found
-
-	type(json_core) :: core
-	type(json_value), pointer :: pc, pp
-
-	! Get the name of the key and the type of its value
-	call json%info(p, name = key)
-
-	if (key == "") return
-
-	call json%get_path(p, path)
-
-	call json%get_parent(p, pp)
-	call json%get_parent(pp, pp)
-	call json%get_path(pp, gpath)
-	!print *, "body obj grandparent path = """, gpath, """"
-
-	if (gpath /= "world.bodies") then
-		write(*,*) ERROR_STR//"unexpected nested object in bodies: """//path//""""
-		!call exit(-1)
-		return
-	end if
-
-	!print *, "key = """//key//""""
-	!print *, "path = """//path//""""
-
-	!!case_: select case (key)
-	!case_: select case (path)
-	case_: if (key == "pos") then
-		!print *, "found body pos"
-
-		count_ = json%count(p)
-		if (count_ /= ND) then
-			write(*,*) "Error:"
-			write(*,*) "body pos must have 3 components"
-			finished = .true.
-			io = ERR_JSON_SYNTAX
-		end if
-
-		print *, "ib traverse_body = ", ib
-
-		do i = 1, count_
-			call json%get_child(p, i, pc, found)
-			call json%get(pc, "@", w%bodies(ib)%pos(i))
-		end do
-		print *, "body pos = ", w%bodies(ib)%pos
-	else if (key == "vel") then
-		!print *, "found body vel"
-
-		count_ = json%count(p)
-		if (count_ /= ND) then
-			write(*,*) "Error:"
-			write(*,*) "body vel must have 3 components"
-			finished = .true.
-			io = ERR_JSON_SYNTAX
-		end if
-
-		print *, "ib traverse_body = ", ib
-
-		do i = 1, count_
-			call json%get_child(p, i, pc, found)
-			call json%get(pc, "@", w%bodies(ib)%vel(i))
-		end do
-		print *, "body vel = ", w%bodies(ib)%vel
-
-	else if (key == "coef_rest") then
-		call json%get(p, "@", w%bodies(ib)%coef_rest)
-		print *, "body coef_rest = ", w%bodies(ib)%coef_rest
-
-	else
-
-		if (key == filename) exit case_
-		if (key == ""      ) exit case_
-
-		! TODO: consider making this an error, unless running with a "loose
-		! syntax" cmd arg.  Same idea for unknown cmd args.  Allowing unknown
-		! keys is good for future compatibility but bad for users who might make
-		! typos.
-
-		write(*,*) "Warning:  unknown JSON path"
-		write(*,*) "Path    :"""//path//""""
-		write(*,*)
-
-	!end select case_
-	end if case_
-
-	if (json%failed()) then
-
-		write(*,*) "Error:"
-		write(*,*) "Could not load file """//filename//""""
-		write(*,*)
-		call json%print_error_message()
-		write(*,*)
-		finished = .true.
-		io = ERR_JSON_SYNTAX
-
-	end if
-
-	! always false, since we want to traverse all nodes:
-	finished = .false.
-
-end subroutine traverse_body
+end subroutine ribbit_main
 
 !===============================================================================
 
-end subroutine ribbit_main
+function get_array(json, p, n) result(array)
+	use json_module
+
+	type(json_core) :: json
+	type(json_value), pointer, intent(in) :: p
+	integer, intent(in) :: n
+
+	double precision :: array(n)
+
+	!********
+
+	integer :: i, io, count_
+	type(json_value), pointer :: pc
+
+	count_ = json%count(p)
+	if (count_ /= n) then
+		write(*,*) "Error:"
+		! TODO: get path and quote it for error message
+		write(*,*) "array must have 3 components"
+		!finished = .true.
+		io = ERR_JSON_SYNTAX
+		call exit(io)
+	end if
+
+	do i = 1, count_
+		call json%get_child(p, i, pc)
+		call json%get(pc, "@", array(i))
+	end do
+
+end function get_array
 
 !===============================================================================
 
