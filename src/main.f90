@@ -9,11 +9,37 @@ module ribbit
 	integer, parameter :: ND = 3
 
 	integer, parameter :: &
-		ERR_JSON_SYNTAX = -1, &
-		ERR_LOAD_JSON   = -2
+		EXIT_FAILURE = -1, &
+		EXIT_SUCCESS = 0
 
-	! TODO: color
-	character(len = *), parameter :: ERROR_STR = "Error: "
+	character, parameter :: &
+			NULL_CHAR       = char( 0), &
+			TAB             = char( 9), &
+			LINE_FEED       = char(10), &
+			VERT_TAB        = char(11), &
+			CARRIAGE_RETURN = char(13), &
+			ESC             = char(27)
+
+	! TODO: make these variables, with colors disabled if output_unit is not tty
+	! and an option to --force-color
+	character(len = *), parameter :: &
+			fg_bold               = esc//'[;1m', &
+			fg_yellow             = esc//'[33m', &
+			fg_bright_red         = esc//'[91m', &
+			fg_bold_bright_red    = esc//'[91;1m', &
+			fg_bold_bright_yellow = esc//'[93;1m', &
+			fg_bright_green       = esc//'[92m', &
+			fg_bright_yellow      = esc//'[93m', &
+			fg_bright_blue        = esc//'[94m', &
+			fg_bright_magenta     = esc//'[95m', &
+			fg_bright_cyan        = esc//'[96m', &
+			fg_bright_white       = esc//'[97m', &
+			color_reset           = esc//'[0m'
+
+	character(len = *), parameter :: &
+		ERROR_STR = fg_bold_bright_red   //"Error"  //fg_bold//": "//color_reset, &
+		!WARN_STR  = fg_bold_bright_yellow//"Warning"//fg_bold//": "//color_reset
+		WARN_STR  = fg_yellow//"Warning"//fg_bold//": "//color_reset
 
 	!********
 
@@ -56,10 +82,11 @@ function read_json(filename) result(w)
 
 	character(kind=json_CK, len=:), allocatable :: key, sval, path
 
-	integer :: io, ib
+	integer :: ib
 	integer(json_IK) :: ival, count_, count_w, count_gc, i, ic, igc, index_
 	integer, allocatable :: template(:), t2(:,:)
 
+	logical :: permissive_json = .true.  ! TODO: add cmd arg to control
 	logical(json_LK) :: found
 
 	type(json_core) :: core
@@ -71,18 +98,14 @@ function read_json(filename) result(w)
 
 	call json%load(filename = filename)
 	if (json%failed()) then
-		write(*,*) "Error:"
-		write(*,*) "Could not load file """//filename//""""
-		write(*,*)
+		write(*,*) ERROR_STR//"could not load file """//filename//""""
+		write(*,*) fg_bright_cyan
 		call json%print_error_message()
-		write(*,*)
-		io = ERR_LOAD_JSON
-		! TODO: make function and use io as return val
-		call exit(io)
+		write(*,*) color_reset
+		call exit(EXIT_FAILURE)
 	end if
 
 	call json%print()
-
 
 	call core%initialize()
 	call json%get(pw)
@@ -93,6 +116,8 @@ function read_json(filename) result(w)
 
 	count_w = core%count(pw)
 	print *, "count world children = ", count_w
+
+	! TODO: set world default (grav_accel, etc.)
 
 	do ic = 1, count_w
 	call core%get_child(pw, ic, p)
@@ -121,6 +146,7 @@ function read_json(filename) result(w)
 		count_ = core%count(p)
 		print *, "bodies count = ", count_
 		allocate(w%bodies(count_))
+		! TODO: set defaults for each body
 
 		do ib = 1, count_
 			call core%get_child(p, ib, pc)
@@ -150,8 +176,12 @@ function read_json(filename) result(w)
 					call core%get(pgc, "@", w%bodies(ib)%coef_rest)
 
 				case default
-					! TODO
-					print *, "bad key ", key
+					if (permissive_json) then
+						write(*,*) WARN_STR //"unknown json key """//key//""""
+					else
+						write(*,*) ERROR_STR//"unknown json key """//key//""""
+						call exit(EXIT_FAILURE)
+					end if
 
 				end select
 
@@ -165,34 +195,33 @@ function read_json(filename) result(w)
 
 	case default
 
-		if (key == filename) exit case_
-		if (key == ""      ) exit case_
-		!if (starts_with(path, "world.bodies")) exit case_
+		!if (key == filename) exit case_
+		!if (key == ""      ) exit case_
 
 		! TODO: consider making this an error, unless running with a "loose
 		! syntax" cmd arg.  Same idea for unknown cmd args.  Allowing unknown
 		! keys is good for future compatibility but bad for users who might make
 		! typos.
 
-		write(*,*) "Warning:  unknown JSON key"
-		write(*,*) "Key    :"""//key//""""
-		write(*,*)
+		if (permissive_json) then
+			write(*,*) WARN_STR //"unknown json key """//key//""""
+		else
+			write(*,*) ERROR_STR//"unknown json key """//key//""""
+			call exit(EXIT_FAILURE)
+		end if
 
 	end select case_
 	end do
 
 	if (core%failed()) then
 
-		write(*,*) "Error:"
-		write(*,*) "Could not load file """//filename//""""
-		write(*,*)
+		write(*,*) ERROR_STR//"could not load file """//filename//""""
+		write(*,*) fg_bright_cyan
 		call core%print_error_message()
-		write(*,*)
-		io = ERR_JSON_SYNTAX
+		write(*,*) color_reset
+		call exit(EXIT_FAILURE)
 
 	end if
-
-	if (io /= 0) call exit(io)
 
 end function read_json
 
@@ -224,6 +253,7 @@ subroutine ribbit_main()
 	filename = "./inputs/bouncy-balls.ribbit"
 
 	w = read_json(filename)
+	!return ! TODO
 
 	open(newunit = fid, file = "dump3.csv")
 	w%t = w%t_start
@@ -276,17 +306,16 @@ function get_array(json, p, n) result(array)
 
 	!********
 
+	character(len = :), allocatable :: path
 	integer :: i, io, count_
 	type(json_value), pointer :: pc
 
 	count_ = json%count(p)
 	if (count_ /= n) then
-		write(*,*) "Error:"
-		! TODO: get path and quote it for error message
-		write(*,*) "array must have 3 components"
-		!finished = .true.
-		io = ERR_JSON_SYNTAX
-		call exit(io)
+		call json%get_path(p, path)
+		write(*,*) ERROR_STR//"array at json path """//path &
+			//""" must have 3 components"
+		call exit(EXIT_FAILURE)
 	end if
 
 	do i = 1, count_
@@ -314,6 +343,7 @@ program main
 	implicit none
 
 	call ribbit_main()
+	call exit(EXIT_SUCCESS)
 
 end program main
 
