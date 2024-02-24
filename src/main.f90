@@ -81,8 +81,11 @@ module ribbit
 
 		double precision :: ground_z
 
-		double precision :: t
+		! Input time bounds and step size
 		double precision :: t_start, t_end, dt
+
+		double precision  :: t   ! transient time value for current step
+		integer(kind = 8) :: it  ! time index
 
 	end type world_t
 
@@ -100,6 +103,13 @@ module ribbit
 
 	end type args_t
 
+	!********
+
+	interface to_str
+		procedure :: to_str_i32
+		procedure :: to_str_i64
+	end interface to_str
+
 contains
 
 !===============================================================================
@@ -113,8 +123,9 @@ function read_geom(filename) result(g)
 	!********
 
 	character :: buf2*2
+	character(len = 2) :: ca, cb, cc
 
-	integer :: io, fid, iv, it
+	integer :: io, fid, iv, it, ibuf(9)
 
 	! Could be extended to switch on different file formats based on the
 	! filename extension
@@ -143,8 +154,8 @@ function read_geom(filename) result(g)
 	end do
 	rewind(fid)
 
-	print *, "nv = ", g%nv
-	print *, "nt = ", g%nt
+	write(*,*) to_str(g%nv)//" vertices"
+	write(*,*) to_str(g%nt)//" triangles"
 
 	allocate(g%v( ND, g%nv ))
 	allocate(g%t( NT, g%nt ))
@@ -168,16 +179,26 @@ function read_geom(filename) result(g)
 		else if (buf2 == "f ") then
 			it = it + 1
 			backspace(fid)
+
 			read(fid, *, iostat = io) buf2, g%t(:,it)
+
+			!! TODO: dynamically parse string for other obj face formats
+			!read(fid, *, iostat = io) buf2, ibuf(1: 6)
+			!read(fid, "(a,i0,x,i,x,i,x,i,x,i,x,i)", iostat = io) buf2, ibuf(1: 6)
+			!read(fid, *, iostat = io) ca, ibuf(1), cb, ibuf(2), cc, ibuf(3)
+			!read(fid, "(a,i12,x,i12,x,i12)", iostat = io) buf2, ibuf(1), cb, ibuf(2), cc, ibuf(3)
+
+			!print *, "ibuf = ", ibuf
+			!stop
+
 			call handle_read_io(filename, io)
 
 		end if
 
 	end do
-	print "(3es16.6)", g%v
-	print "(3i12)", g%t
-
-	!stop  ! TODO
+	!print "(3es16.6)", g%v
+	!print "(3i12)", g%t
+	print "(3i12)", g%t(:, 1: min(10, g%nt))
 
 end function read_geom
 
@@ -236,13 +257,22 @@ subroutine get_next_arg(i, argv)
 end subroutine get_next_arg
 
 !===============================================================================
-function to_str(int_) result(str_)
-	integer, intent(in) :: int_
+function to_str_i32(int_) result(str_)
+	integer(kind = 4), intent(in) :: int_
 	character(len = :), allocatable :: str_
 	character :: buffer*16
-	write(buffer, *) int_
+	write(buffer, "(i0)") int_
 	str_ = trim(buffer)
-end function to_str
+end function to_str_i32
+
+!===============================================================================
+function to_str_i64(int_) result(str_)
+	integer(kind = 8), intent(in) :: int_
+	character(len = :), allocatable :: str_
+	character :: buffer*16
+	write(buffer, "(i0)") int_
+	str_ = trim(buffer)
+end function to_str_i64
 !===============================================================================
 
 function read_args() result(args)
@@ -564,7 +594,6 @@ subroutine ribbit_run(w)
 	double precision :: p0(ND), v0(ND)
 
 	integer :: ib, i, io
-	integer(kind = 8) :: nt
 	integer :: fid
 
 	logical :: found
@@ -573,11 +602,13 @@ subroutine ribbit_run(w)
 
 	write(*,*) "starting ribbit_run()"
 
-	open(newunit = fid, file = "dump3.csv")
+	!open(newunit = fid, file = "dump3.csv")
+	open(newunit = fid, file = "dump4.csv", action = "write", iostat = io)
+	! TODO: handle io
+
 	w%t = w%t_start
-	nt = 0
+	w%it = 0
 	do while (w%t <= w%t_end)
-		nt = nt + 1
 
 		!print *, "t, z = ", w%t, w%bodies(1)%pos(3)
 		write(fid, "(es16.6)", advance = "no") w%t
@@ -602,13 +633,121 @@ subroutine ribbit_run(w)
 			w%bodies(ib) = b
 		end do
 
+		call write_step(w)
+		w%it = w%it + 1
 		w%t = w%t + w%dt
 	end do
+	call write_case(w)
 
-	write(*,*) "number of time steps = ", nt
+	write(*,*) "number of time steps = ", w%it
 	write(*,*) "ending ribbit_run()"
 
 end subroutine ribbit_run
+
+!===============================================================================
+
+subroutine write_case(w)
+
+	type(world_t), intent(in) :: w
+
+	!********
+
+	integer :: fid, io, i, ib
+
+	open(newunit = fid, file = "scratch/ribbit-1-.case", &
+		action = "write", iostat = io)
+
+	write(fid, "(a)") "FORMAT"
+	write(fid, "(a)") "type: ensight gold"
+	write(fid, "(a)") "GEOMETRY"
+
+	!!write(fid, "(a)") "model: 1 exgold2-**.geo"
+	!write(fid, "(a)") "model: 1 exgold2-*.geo"
+	write(fid, "(a)") "model: 1 "//"ribbit-1-"//"*.geo"
+
+	!write(fid, "(a)") "VARIABLE"
+	!write(fid, "(a)") "scalar per node: 1 Stress exgold2.scl**"
+	!write(fid, "(a)") "vector per node: 1 Displacement exgold2.dis**"
+
+	write(fid, "(a)") "TIME"
+	write(fid, "(a)") "time set: 1"
+	!write(fid, "(a)") "#number of steps: 2"
+	!write(fid, "(a)") "number of steps: 3"
+	write(fid, "(a)") "number of steps: "//to_str(w%it)
+
+	write(fid, "(a)") "filename start number: 0"
+	write(fid, "(a)") "filename increment: 1"
+	write(fid, "(a)") "time values:"
+
+	! TODO: write actual times
+	do i = 1, w%it
+		write(fid, *) i
+	end do
+
+	!write(fid, "(a)") "1.0"
+	!write(fid, "(a)") "2.0"
+	!write(fid, "(a)") "3.0"
+
+	close(fid)
+
+end subroutine write_case
+
+!===============================================================================
+
+subroutine write_step(w)
+
+	type(world_t), intent(in) :: w
+
+	!********
+
+	integer :: fid, io, i, ib
+
+	open(newunit = fid, file = "scratch/ribbit-1-"//to_str(w%it)//".geo", &
+		action = "write", iostat = io)
+
+	write(fid, "(a)") "ensight gold geometry file"
+	write(fid, "(a)") "generated by ribbit"
+	write(fid, "(a)") "node id off"
+	write(fid, "(a)") "element id off"
+	write(fid, "(a)") "part"
+	write(fid, "(a)") "1"  ! TODO: body index?  1 part per body or cat into single part?
+	write(fid, "(a)") "ribbit world part"
+	write(fid, "(a)") "coordinates"
+
+	!! TODO: cat all bodies into a single part
+	ib = 1
+	!write(fid, "(a)") "4"
+	write(fid, "(i0)") w%bodies(ib)%geom%nv
+
+	!!write(fid, "(a)") "# all x coords"
+	!write(fid, "(a)") "0"
+	!write(fid, "(a)") "1"
+	!write(fid, "(a)") "0"
+	!write(fid, "(a)") "0"
+
+	! Translate by position
+
+	! x coords
+	write(fid, "(es16.6)") w%bodies(ib)%geom%v(1,:) + w%bodies(ib)%pos(1)
+
+	! y coords
+	write(fid, "(es16.6)") w%bodies(ib)%geom%v(2,:) + w%bodies(ib)%pos(2)
+
+	! z coords
+	write(fid, "(es16.6)") w%bodies(ib)%geom%v(3,:) + w%bodies(ib)%pos(3)
+
+	write(fid, "(a)") "tria3"
+	write(fid, "(i0)") w%bodies(ib)%geom%nt
+	write(fid, "(3(i0,x))") w%bodies(ib)%geom%t
+
+	!write(fid, "(a)") "1 2 3"
+	!write(fid, "(a)") "1 2 4"
+	!write(fid, "(a)") "1 3 4"
+	!write(fid, "(a)") "2 3 4"
+
+	close(fid)
+
+end subroutine write_step
 
 !===============================================================================
 
