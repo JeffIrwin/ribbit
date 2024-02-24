@@ -135,10 +135,7 @@ function read_geom(filename) result(g)
 	g%nt = 0
 
 	open(newunit = fid, file = filename, action = "read", iostat = io)
-	if (io /= 0) then
-		write(*,*) ERROR_STR//"cannot open geometry file """//filename//""""
-		call ribbit_exit(EXIT_FAILURE)
-	end if
+	call handle_open_read_io(filename, io)
 
 	! First pass: count vertices and triangles
 	do
@@ -219,10 +216,21 @@ subroutine handle_open_write_io(filename, io)
 	character(len = *), intent(in) :: filename
 	integer, intent(in) :: io
 	if (io /= 0) then
-		write(*,*) ERROR_STR//"cannot file """//filename//""" for writing"
+		write(*,*) ERROR_STR//"cannot open file """//filename//""" for writing"
 		call ribbit_exit(EXIT_FAILURE)
 	end if
 end subroutine handle_open_write_io
+
+!===============================================================================
+
+subroutine handle_open_read_io(filename, io)
+	character(len = *), intent(in) :: filename
+	integer, intent(in) :: io
+	if (io /= 0) then
+		write(*,*) ERROR_STR//"cannot open file """//filename//""" for reading"
+		call ribbit_exit(EXIT_FAILURE)
+	end if
+end subroutine handle_open_read_io
 
 !===============================================================================
 

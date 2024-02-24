@@ -35,6 +35,7 @@ jobs:
       env:
         FPM_FC: gfortran-12
       run: |
+        mkdir scratch
         fpm run --profile debug   -- inputs/bouncy-tet.ribbit
         fpm run --profile release -- inputs/bouncy-tet.ribbit
 
