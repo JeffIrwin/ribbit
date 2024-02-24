@@ -129,6 +129,7 @@ function read_geom(filename) result(g)
 		call ribbit_exit(EXIT_FAILURE)
 	end if
 
+	! First pass: count vertices and triangles
 	do
 		read(fid, *, iostat = io) buf2
 		if (io == iostat_end) exit
@@ -148,6 +149,7 @@ function read_geom(filename) result(g)
 	allocate(g%v( ND, g%nv ))
 	allocate(g%t( NT, g%nt ))
 
+	! Second pass: save data
 	iv = 0
 	it = 0
 	do
@@ -303,7 +305,7 @@ function read_args() result(args)
 			!	args%out_file  = argv
 
 			else
-				write(*,*) ERROR_STR//"unknown argument `"//argv//"`"
+				write(*,*) ERROR_STR//"bad argument `"//argv//"`"
 				error = .true.
 
 			end if
@@ -370,132 +372,130 @@ function read_world(filename, permissive) result(w)
 	!********
 
 	character(len = :), allocatable :: geom_name
-	character(kind=json_CK, len=:), allocatable :: key, sval, path
+	character(kind=json_CK, len = :), allocatable :: key, sval, path
 
 	integer :: ib
-	integer(json_IK) :: ival, count_, count_w, count_gc, i, ic, igc, index_
+	integer(json_IK) :: ival, count_, count_gc, i, ic, igc, index_
 	integer, allocatable :: template(:), t2(:,:)
 
 	logical(json_LK) :: found
+	logical, parameter :: STRICT = .false.  ! STRICT is not permissive
 
-	type(json_core) :: core
-	type(json_file) :: json
-	type(json_value), pointer :: p, pw, pc, pp, pgc
+	type(json_core) :: json
+	type(json_file) :: file_
+	type(json_value), pointer :: p, proot, pw, pc, pp, pgc
 
 	! initialize the class
-	call json%initialize()
+	call file_%initialize()
 
-	call json%load(filename = filename)
-	if (json%failed()) then
+	call file_%load(filename = filename)
+	if (file_%failed()) then
 		write(*,*) ERROR_STR//"could not load file """//filename//""""
 		write(*,*) fg_bright_cyan
-		call json%print_error_message()
+		call file_%print_error_message()
 		write(*,*) color_reset
 		call ribbit_exit(EXIT_FAILURE)
 	end if
 
-	call json%print()
+	call file_%print()
 
-	call core%initialize()
-	call json%get(pw)
-	!call json%get(pw, "world")
-	!call json%get_by_path(pw, "world")
-	call core%get_child(pw, pw)
-	!! TODO: traverse root to check typos, name of "world"
+	call json%initialize()
+	call file_%get(proot)
 
-	count_w = core%count(pw)
-	!print *, "count world children = ", count_w
+	do ic = 1, json%count(proot)
+	call json%get_child(proot, ic, p)
+	call json%info(p, name = key)
+
+	select case (key)
+	case ("world")
+		!pw = p
+		pw => p
+
+	case default
+		call bad_key(key, STRICT)
+
+	end select
+	end do
+	!call json%get_child(proot, pw)
 
 	! TODO: set world default (grav_accel, etc.)
 
-	do ic = 1, count_w
-	call core%get_child(pw, ic, p)
-	call core%info(p, name = key)
+	do ic = 1, json%count(pw)
+	call json%get_child(pw, ic, p)
+	call json%info(p, name = key)
 
 	select case (key)
 	case ("dt")
-		call core%get(p, "@", w%dt)
+		call json%get(p, "@", w%dt)
 		!print *, "w%dt = ", w%dt
 
 	case ("t_start")
-		call core%get(p, "@", w%t_start)
+		call json%get(p, "@", w%t_start)
 		!print *, "w%t_start = ", w%t_start
 
 	case ("t_end")
-		call core%get(p, "@", w%t_end)
+		call json%get(p, "@", w%t_end)
 		!print *, "w%t_end = ", w%t_end
 
 	case ("grav_accel")
 
-		w%grav_accel = get_array(core, p, ND)
+		w%grav_accel = get_array(json, p, ND)
 		!print *, "grav_accel = ", w%grav_accel
 
 	case ("bodies")
-		count_ = core%count(p)
+		count_ = json%count(p)
 		!print *, "bodies count = ", count_
 		allocate(w%bodies(count_))
 		! TODO: set defaults for each body
 
 		do ib = 1, count_
-			call core%get_child(p, ib, pc)
+			call json%get_child(p, ib, pc)
 
 			!print *, "traversing body ", ib
 
 			! "grandchildren" count
-			count_gc = core%count(pc)
+			count_gc = json%count(pc)
 			!print *, "count_gc = ", count_gc
 
 			do igc = 1, count_gc
-				call core%get_child(pc, igc, pgc)
-				call core%info(pgc, name = key)
+				call json%get_child(pc, igc, pgc)
+				call json%info(pgc, name = key)
 
 				select case (key)
 				case ("geom")
-					!call core%get(pgc, "@", w%geom_name)
-					call core%get(pgc, "@", geom_name)
+					!call json%get(pgc, "@", w%geom_name)
+					call json%get(pgc, "@", geom_name)
 					w%bodies(ib)%geom = read_geom(geom_name)
 
 				case ("pos")
-					w%bodies(ib)%pos = get_array(core, pgc, ND)
+					w%bodies(ib)%pos = get_array(json, pgc, ND)
 					!print *, "w%bodies(ib)%pos", w%bodies(ib)%pos
 
 				case ("vel")
-					w%bodies(ib)%vel = get_array(core, pgc, ND)
+					w%bodies(ib)%vel = get_array(json, pgc, ND)
 					!print *, "w%bodies(ib)%vel", w%bodies(ib)%vel
 
 				case ("coef_rest")
-					call core%get(pgc, "@", w%bodies(ib)%coef_rest)
+					call json%get(pgc, "@", w%bodies(ib)%coef_rest)
 
 				case default
-					if (permissive) then
-						write(*,*) WARN_STR //"unknown json key """//key//""""
-					else
-						write(*,*) ERROR_STR//"unknown json key """//key//""""
-						call ribbit_exit(EXIT_FAILURE)
-					end if
-
+					call bad_key(key, permissive)
 				end select
 
 			end do
 		end do
 
 	case default
-
-		if (permissive) then
-			write(*,*) WARN_STR //"unknown json key """//key//""""
-		else
-			write(*,*) ERROR_STR//"unknown json key """//key//""""
-			call ribbit_exit(EXIT_FAILURE)
-		end if
+		call bad_key(key, permissive)
 
 	end select
 	end do
 
-	if (core%failed()) then
+	if (json%failed()) then
 
 		write(*,*) ERROR_STR//"could not load file """//filename//""""
 		write(*,*) fg_bright_cyan
-		call core%print_error_message()
+		call json%print_error_message()
 		write(*,*) color_reset
 		call ribbit_exit(EXIT_FAILURE)
 
@@ -504,6 +504,21 @@ function read_world(filename, permissive) result(w)
 	!call exit(0)
 
 end function read_world
+
+!===============================================================================
+
+subroutine bad_key(key, permissive)
+	character(len = *), intent(in) :: key
+	logical, intent(in) :: permissive
+
+	if (permissive) then
+		write(*,*) WARN_STR //"bad json key """//key//""""
+	else
+		write(*,*) ERROR_STR//"bad json key """//key//""""
+		call ribbit_exit(EXIT_FAILURE)
+	end if
+
+end subroutine bad_key
 
 !===============================================================================
 
@@ -561,7 +576,7 @@ subroutine ribbit_run(w)
 	w%t = w%t_start
 	do while (w%t <= w%t_end)
 
-		print *, "t, z = ", w%t, w%bodies(1)%pos(3)
+		!print *, "t, z = ", w%t, w%bodies(1)%pos(3)
 		write(fid, "(es16.6)", advance = "no") w%t
 		do ib = 1, size(w%bodies)
 			write(fid, "(3es16.6)", advance = "no") w%bodies(ib)%pos
