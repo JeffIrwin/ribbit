@@ -35,8 +35,8 @@ jobs:
       env:
         FPM_FC: gfortran-12
       run: |
-        fpm run --profile debug
-        fpm run --profile release
+        fpm run --profile debug   -- inputs/bouncy-tet.ribbit
+        fpm run --profile release -- inputs/bouncy-tet.ribbit
 
     #- if: matrix.os == 'ubuntu-latest'
     #  run: |

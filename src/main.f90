@@ -564,6 +564,7 @@ subroutine ribbit_run(w)
 	double precision :: p0(ND), v0(ND)
 
 	integer :: ib, i, io
+	integer(kind = 8) :: nt
 	integer :: fid
 
 	logical :: found
@@ -574,7 +575,9 @@ subroutine ribbit_run(w)
 
 	open(newunit = fid, file = "dump3.csv")
 	w%t = w%t_start
+	nt = 0
 	do while (w%t <= w%t_end)
+		nt = nt + 1
 
 		!print *, "t, z = ", w%t, w%bodies(1)%pos(3)
 		write(fid, "(es16.6)", advance = "no") w%t
@@ -590,7 +593,7 @@ subroutine ribbit_run(w)
 			b%vel = v0 + w%grav_accel * w%dt
 
 			p0 = b%pos
-			b%pos = p0 + 0.5 * (v0 + b%vel)
+			b%pos = p0 + 0.5 * (v0 + b%vel) * w%dt
 			if (b%pos(3) < w%ground_z) then
 				b%pos = p0
 				b%vel(3) =  -b%coef_rest * v0(3)
@@ -602,6 +605,7 @@ subroutine ribbit_run(w)
 		w%t = w%t + w%dt
 	end do
 
+	write(*,*) "number of time steps = ", nt
 	write(*,*) "ending ribbit_run()"
 
 end subroutine ribbit_run
