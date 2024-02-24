@@ -204,10 +204,7 @@ end function read_geom
 subroutine handle_read_io(filename, io)
 	character(len = *), intent(in) :: filename
 	integer, intent(in) :: io
-	if (io /= 0) then
-		write(*,*) ERROR_STR//"cannot read file """//filename//""""
-		call ribbit_exit(EXIT_FAILURE)
-	end if
+	if (io /= 0) call panic("cannot read file """//filename//"""")
 end subroutine handle_read_io
 
 !===============================================================================
@@ -215,10 +212,7 @@ end subroutine handle_read_io
 subroutine handle_open_write_io(filename, io)
 	character(len = *), intent(in) :: filename
 	integer, intent(in) :: io
-	if (io /= 0) then
-		write(*,*) ERROR_STR//"cannot open file """//filename//""" for writing"
-		call ribbit_exit(EXIT_FAILURE)
-	end if
+	if (io /= 0) call panic("cannot open file """//filename//""" for writing")
 end subroutine handle_open_write_io
 
 !===============================================================================
@@ -226,10 +220,7 @@ end subroutine handle_open_write_io
 subroutine handle_open_read_io(filename, io)
 	character(len = *), intent(in) :: filename
 	integer, intent(in) :: io
-	if (io /= 0) then
-		write(*,*) ERROR_STR//"cannot open file """//filename//""" for reading"
-		call ribbit_exit(EXIT_FAILURE)
-	end if
+	if (io /= 0) call panic("cannot open file """//filename//""" for reading")
 end subroutine handle_open_read_io
 
 !===============================================================================
@@ -253,19 +244,16 @@ subroutine get_next_arg(i, argv)
 	i = i + 1
 	argc = command_argument_count()
 	if (i > argc) then
-		write(*,*) ERROR_STR//"missing required argument after """//argv0//""""
-		call ribbit_exit(EXIT_FAILURE)
+		call panic("missing required argument after """//argv0//"""")
 	end if
 
 	call get_command_argument(i, buffer, status = io)
 	if (io == STAT_TRUNC) then
 		! Could make buffer allocatable and automatically try resizing
-		write(*,*) ERROR_STR//"command argument too long after """//argv0//""""
-		call ribbit_exit(EXIT_FAILURE)
+		call panic("command argument too long after """//argv0//"""")
 
 	else if (io /= EXIT_SUCCESS) then
-		write(*,*) ERROR_STR//"cannot get command argument after """//argv0//""""
-		call ribbit_exit(EXIT_FAILURE)
+		call panic("cannot get command argument after """//argv0//"""")
 
 	end if
 	argv = trim(buffer)
@@ -563,8 +551,7 @@ subroutine bad_key(key, permissive)
 	if (permissive) then
 		write(*,*) WARN_STR //"bad json key """//key//""""
 	else
-		write(*,*) ERROR_STR//"bad json key """//key//""""
-		call ribbit_exit(EXIT_FAILURE)
+		call panic("bad json key """//key//"""")
 	end if
 
 end subroutine bad_key
@@ -589,9 +576,8 @@ function get_array(json, p, n) result(array)
 	count_ = json%count(p)
 	if (count_ /= n) then
 		call json%get_path(p, path)
-		write(*,*) ERROR_STR//"array at json path """//path &
-			//""" must have 3 components"
-		call ribbit_exit(EXIT_FAILURE)
+		call panic("array at json path """//path &
+			//""" must have "//to_str(n)//" components")
 	end if
 
 	do i = 1, count_
@@ -687,18 +673,10 @@ subroutine write_case(w)
 	write(fid, "(a)") "type: ensight gold"
 	write(fid, "(a)") "GEOMETRY"
 
-	!!write(fid, "(a)") "model: 1 exgold2-**.geo"
-	!write(fid, "(a)") "model: 1 exgold2-*.geo"
 	write(fid, "(a)") "model: 1 "//"ribbit-1-"//"*.geo"
-
-	!write(fid, "(a)") "VARIABLE"
-	!write(fid, "(a)") "scalar per node: 1 Stress exgold2.scl**"
-	!write(fid, "(a)") "vector per node: 1 Displacement exgold2.dis**"
 
 	write(fid, "(a)") "TIME"
 	write(fid, "(a)") "time set: 1"
-	!write(fid, "(a)") "#number of steps: 2"
-	!write(fid, "(a)") "number of steps: 3"
 	write(fid, "(a)") "number of steps: "//to_str(w%it)
 
 	write(fid, "(a)") "filename start number: 0"
@@ -706,15 +684,11 @@ subroutine write_case(w)
 	write(fid, "(a)") "time values:"
 
 	! TODO: write actual times
-	do i = 1, w%it
-		write(fid, *) i
-	end do
-
-	!write(fid, "(a)") "1.0"
-	!write(fid, "(a)") "2.0"
-	!write(fid, "(a)") "3.0"
+	write(fid, "(es16.6)") [(dble(i), i = 1, w%it)]
 
 	close(fid)
+	write(*,*) fg_bright_magenta//"finished writing file """// &
+		case_file//""""//color_reset
 
 end subroutine write_case
 
@@ -744,20 +718,13 @@ subroutine write_step(w)
 	write(fid, "(a)") "ribbit world part"
 	write(fid, "(a)") "coordinates"
 
-	!! TODO: cat all bodies into a single part
+	! TODO: cat all bodies into a single part
 	ib = 1
-	!write(fid, "(a)") "4"
 	write(fid, "(i0)") w%bodies(ib)%geom%nv
-
-	!!write(fid, "(a)") "# all x coords"
-	!write(fid, "(a)") "0"
-	!write(fid, "(a)") "1"
-	!write(fid, "(a)") "0"
-	!write(fid, "(a)") "0"
 
 	! Translate by position
 
-	! x coords
+	! x coords.  whitespace matters
 	write(fid, "(es16.6)") w%bodies(ib)%geom%v(1,:) + w%bodies(ib)%pos(1)
 
 	! y coords
@@ -768,16 +735,19 @@ subroutine write_step(w)
 
 	write(fid, "(a)") "tria3"
 	write(fid, "(i0)") w%bodies(ib)%geom%nt
-	write(fid, "(3(i0,x))") w%bodies(ib)%geom%t
-
-	!write(fid, "(a)") "1 2 3"
-	!write(fid, "(a)") "1 2 4"
-	!write(fid, "(a)") "1 3 4"
-	!write(fid, "(a)") "2 3 4"
+	write(fid, "(3(i0,x))") w%bodies(ib)%geom%t  ! whitespace matters.  3 numbers per line
 
 	close(fid)
 
 end subroutine write_step
+
+!===============================================================================
+
+subroutine panic(msg)
+	character(len = *), intent(in) :: msg
+	write(*,*) ERROR_STR//msg
+	call ribbit_exit(EXIT_FAILURE)
+end subroutine panic
 
 !===============================================================================
 
@@ -806,4 +776,6 @@ program main
 	call ribbit_exit(EXIT_SUCCESS)
 
 end program main
+
+!===============================================================================
 
