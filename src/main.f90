@@ -11,7 +11,7 @@ module ribbit
 		ribbit_minor = 1, &
 		ribbit_patch = 0
 
-	integer, parameter :: ND = 3
+	integer, parameter :: ND = 3, NT = 3
 
 	integer, parameter :: &
 		EXIT_FAILURE = -1, &
@@ -47,7 +47,21 @@ module ribbit
 
 	!********
 
+	type geom_t
+
+		! Number of vertices/triangles
+		integer :: nv, nt
+
+		double precision, allocatable :: v(:,:)  ! vertices
+		integer, allocatable          :: t(:,:)  ! triangles
+
+	end type geom_t
+
+	!********
+
 	type body_t
+
+		type(geom_t) :: geom
 
 		double precision :: pos(ND)
 		double precision :: vel(ND)
@@ -87,6 +101,94 @@ module ribbit
 	end type args_t
 
 contains
+
+!===============================================================================
+
+function read_geom(filename) result(g)
+
+	character(len = *), intent(in) :: filename
+
+	type(geom_t) :: g
+
+	!********
+
+	character :: buf2*2
+
+	integer :: io, fid, iv, it
+
+	! Could be extended to switch on different file formats based on the
+	! filename extension
+	write(*,*) "Reading geometry file """//filename//""""
+
+	g%nv = 0
+	g%nt = 0
+
+	open(newunit = fid, file = filename, action = "read", iostat = io)
+	if (io /= 0) then
+		write(*,*) ERROR_STR//"cannot open geometry file """//filename//""""
+		call ribbit_exit(EXIT_FAILURE)
+	end if
+
+	do
+		read(fid, *, iostat = io) buf2
+		if (io == iostat_end) exit
+		call handle_read_io(filename, io)
+
+		!print *, "buf2 = ", buf2
+
+		if (buf2 == "v ") g%nv = g%nv + 1
+		if (buf2 == "f ") g%nt = g%nt + 1
+
+	end do
+	rewind(fid)
+
+	print *, "nv = ", g%nv
+	print *, "nt = ", g%nt
+
+	allocate(g%v( ND, g%nv ))
+	allocate(g%t( NT, g%nt ))
+
+	iv = 0
+	it = 0
+	do
+		read(fid, *, iostat = io) buf2
+		if (io == iostat_end) exit
+		call handle_read_io(filename, io)
+
+		!print *, "buf2 = ", buf2
+
+		if (buf2 == "v ") then
+			iv = iv + 1
+			backspace(fid)
+			read(fid, *, iostat = io) buf2, g%v(:,iv)
+			call handle_read_io(filename, io)
+
+		else if (buf2 == "f ") then
+			it = it + 1
+			backspace(fid)
+			read(fid, *, iostat = io) buf2, g%t(:,it)
+			call handle_read_io(filename, io)
+
+		end if
+
+	end do
+	print "(3es16.6)", g%v
+	print "(3i12)", g%t
+
+	!stop  ! TODO
+
+end function read_geom
+
+!===============================================================================
+
+subroutine handle_read_io(filename, io)
+	character(len = *), intent(in) :: filename
+	integer, intent(in) :: io
+	if (io /= 0) then
+		write(*,*) ERROR_STR//"cannot read file """//filename//""""
+		call ribbit_exit(EXIT_FAILURE)
+	end if
+end subroutine handle_read_io
 
 !===============================================================================
 
@@ -267,6 +369,7 @@ function read_world(filename, permissive) result(w)
 
 	!********
 
+	character(len = :), allocatable :: geom_name
 	character(kind=json_CK, len=:), allocatable :: key, sval, path
 
 	integer :: ib
@@ -347,6 +450,10 @@ function read_world(filename, permissive) result(w)
 				call core%info(pgc, name = key)
 
 				select case (key)
+				case ("geom")
+					!call core%get(pgc, "@", w%geom_name)
+					call core%get(pgc, "@", geom_name)
+					w%bodies(ib)%geom = read_geom(geom_name)
 
 				case ("pos")
 					w%bodies(ib)%pos = get_array(core, pgc, ND)
