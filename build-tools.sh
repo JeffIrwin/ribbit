@@ -8,7 +8,7 @@ cmake --version
 
 #cmake CMakeLists.txt
 cmake -B build -S .
-cmake --build .
+cmake --build build
 
 popd
 
