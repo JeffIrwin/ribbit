@@ -57,6 +57,10 @@ module ribbit
 		double precision, allocatable :: v(:,:)  ! vertices
 		integer, allocatable          :: t(:,:)  ! triangles
 
+		double precision :: com(ND)
+		double precision :: vol, mass
+		double precision :: inertia(ND, ND)  ! TODO
+
 	end type geom_t
 
 	!********
@@ -72,7 +76,7 @@ module ribbit
 		double precision :: ang_vel(ND)
 
 		! TODO: refactor into material struct
-		double precision :: coef_rest
+		double precision :: coef_rest, dens
 
 	end type body_t
 
@@ -203,6 +207,66 @@ function read_geom(filename) result(g)
 	print "(3i12)", g%t(:, 1: min(10, g%nt))
 
 end function read_geom
+
+!===============================================================================
+
+function cross(a, b) result(c)
+
+	double precision, intent(in) :: a(ND), b(ND)
+	double precision :: c(ND)
+
+	c(1) = a(2) * b(3) - a(3) * b(2)
+	c(2) = a(3) * b(1) - a(1) * b(3)
+	c(3) = a(1) * b(2) - a(2) * b(1)
+
+end function cross
+
+!===============================================================================
+
+subroutine get_geom_inertia(g)
+	! TODO: take material argument
+
+	! Get mass, center of mass, volume, and inertia tensor
+
+	type(geom_t), intent(inout) :: g
+
+	!********
+
+	double precision :: vol_tet, com_tet(ND)
+
+	integer :: i
+
+	g%vol = 0.d0
+	do i = 1, g%nt
+
+		! Volume of a tetrahedron formed by triangle i and origin
+		vol_tet = vol_tet + dot_product(g%v(:, g%t(1,i)), &
+		                          cross(g%v(:, g%t(2,i)), &
+		                                g%v(:, g%t(3,i))))
+
+		g%vol = g%vol + vol_tet
+
+		! Center of mass of this tetrahedron
+		com_tet = 0.25d0 * (   &
+			g%v(:, g%t(1,i)) + &
+			g%v(:, g%t(2,i)) + &
+			g%v(:, g%t(3,i)))
+
+		! Overall center of mass is weighted average
+		g%com = g%com + vol_tet * com_tet
+
+		! TODO: get inertia tensor
+
+	end do
+	g%com = g%com / g%vol
+	g%vol = g%vol / 6.d0
+
+	!g%mass = m%dens * g%vol  ! TODO
+
+	print *, "vol = ", g%vol
+	print *, "com = ", g%com
+
+end subroutine get_geom_inertia
 
 !===============================================================================
 
@@ -521,6 +585,7 @@ function read_world(filename, permissive) result(w)
 					!call json%get(pgc, "@", w%geom_name)
 					call json%get(pgc, "@", geom_name)
 					w%bodies(ib)%geom = read_geom(geom_name)
+					call get_geom_inertia(w%bodies(ib)%geom)
 
 				case ("pos")
 					w%bodies(ib)%pos = get_array(json, pgc, ND)
@@ -756,6 +821,8 @@ subroutine write_step(w)
 		write(fid, "(i0)") w%bodies(ib)%geom%nv
 
 		! Copy and convert original vertex positions to 4-byte real
+		!
+		! TODO: translate from origin to COM (center of mass)
 		r = 1.0 * w%bodies(ib)%geom%v
 
 		! Rotation angles about each axis
@@ -783,6 +850,7 @@ subroutine write_step(w)
 
 		! Rotate first and then translate by position
 		r = matmul(rot, r)  ! TODO: lapack
+		! TODO: translate back from COM to origin
 
 		!print *, "rot "
 		!print "(3es16.6)", rot
