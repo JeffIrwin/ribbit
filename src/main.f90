@@ -54,7 +54,9 @@ module ribbit
 		! Number of vertices/triangles
 		integer :: nv, nt
 
-		double precision, allocatable :: v(:,:)  ! vertices
+		double precision, allocatable :: v0(:,:)  ! original vertex locations
+		double precision, allocatable :: v (:,:)  ! rotated/translated locations
+
 		integer, allocatable          :: t(:,:)  ! triangles
 
 	end type geom_t
@@ -79,8 +81,8 @@ module ribbit
 		double precision :: ang(ND)
 		double precision :: ang_vel(ND)
 
-		! TODO: delete com from struct?  Shouldn't need to save after translating
-		double precision :: com(ND)
+		!! delete com from struct?  Shouldn't need to save after translating
+		!double precision :: com(ND)
 
 		double precision :: vol, mass
 		double precision :: inertia(ND, ND)  ! TODO
@@ -271,12 +273,16 @@ subroutine get_inertia(b, w)
 	vol = vol / 6.d0
 
 	b%vol = vol
-	b%com = com
+	!b%com = com
 
 	! Translate all vertices so that the center of mass is at the origin
 	do i = 1, b%geom%nv
 		b%geom%v(:,i) = b%geom%v(:,i) - com
 	end do
+
+	! Backup original vertex locations so that rounding errors do not warp the
+	! shape of the body
+	b%geom%v0 = b%geom%v
 
 	b%mass = w%mats(b%mat)%dens * b%vol
 
@@ -614,14 +620,17 @@ function read_world(filename, permissive) result(w)
 
 				case ("ang")
 					w%bodies(ib)%ang = get_array(json, pgc, ND)
-					print *, "w%bodies(ib)%ang", w%bodies(ib)%ang
+					!print *, "w%bodies(ib)%ang", w%bodies(ib)%ang
 
 					! Convert from degrees to radians
 					w%bodies(ib)%ang = PI / 180.d0 * w%bodies(ib)%ang
 
 				case ("ang_vel")
 					w%bodies(ib)%ang_vel = get_array(json, pgc, ND)
-					!print *, "w%bodies(ib)%ang_vel", w%bodies(ib)%ang_vel
+					print *, "w%bodies(ib)%ang_vel", w%bodies(ib)%ang_vel
+
+					! Convert from degrees to radians
+					w%bodies(ib)%ang_vel = PI / 180.d0 * w%bodies(ib)%ang_vel
 
 				case ("mat")
 					call json%get(pgc, "@", w%bodies(ib)%mat)
@@ -796,9 +805,15 @@ subroutine ribbit_run(w)
 
 			p0 = b%pos
 			b%pos = p0 + 0.5 * (v0 + b%vel) * w%dt
-			if (b%pos(3) < w%ground_z) then
+
+			b%ang = modulo(b%ang + b%ang_vel * w%dt, 2 * PI)
+			call update_pose(b)
+
+			!if (b%pos(3) < w%ground_z) then
+			if (minval(b%geom%v(3,:)) < w%ground_z) then
 				b%pos = p0
 				b%vel(3) =  -w%mats(b%mat)%coef_rest * v0(3)
+				call update_pose(b)
 			end if
 
 			w%bodies(ib) = b
@@ -814,6 +829,57 @@ subroutine ribbit_run(w)
 	write(*,*) "ending ribbit_run()"
 
 end subroutine ribbit_run
+
+!===============================================================================
+
+subroutine update_pose(b)
+
+	type(body_t), intent(inout)  :: b
+
+	!********
+
+	integer :: i
+
+	double precision :: ax, ay, az, &
+		rot(ND, ND), rotx(ND, ND), roty(ND, ND), rotz(ND, ND)
+	!double precision, allocatable :: r(:,:)
+
+	!b%geom%v = b%geom%v0
+
+	! Rotation angles about each axis
+	ax = b%ang(1)
+	ay = b%ang(2)
+	az = b%ang(3)
+
+	! Cardinal rotation matrices
+
+	rotx(:,1) = [1.d0,     0.d0,    0.d0]
+	rotx(:,2) = [0.d0,  cos(ax), sin(ax)]
+	rotx(:,3) = [0.d0, -sin(ax), cos(ax)]
+
+	roty(:,1) = [cos(ay), 0.d0, -sin(ay)]
+	roty(:,2) = [   0.d0, 1.d0,     0.d0]
+	roty(:,3) = [sin(ay), 0.d0,  cos(ay)]
+
+	rotz(:,1) = [ cos(az), sin(az), 0.d0]
+	rotz(:,2) = [-sin(az), cos(az), 0.d0]
+	rotz(:,3) = [    0.d0,    0.d0, 1.d0]
+
+	! First rotate about x, then about y, then about z
+	rot = matmul(rotz, matmul(roty, rotx))
+	!rot = matmul(rotx, matmul(roty, rotz))
+
+	! Rotate first and then translate by com position
+	b%geom%v = matmul(rot, b%geom%v0)  ! TODO: lapack
+
+	!print *, "rot "
+	!print "(3es16.6)", rot
+
+	b%geom%v(1,:) = b%geom%v(1,:) + b%pos(1)
+	b%geom%v(2,:) = b%geom%v(2,:) + b%pos(2)
+	b%geom%v(3,:) = b%geom%v(3,:) + b%pos(3)
+
+end subroutine update_pose
 
 !===============================================================================
 
@@ -870,7 +936,7 @@ subroutine write_step(w)
 
 	integer :: fid, io, i, ib
 
-	real :: rot(ND, ND), rotx(ND, ND), roty(ND, ND), rotz(ND, ND), ax, ay, az
+	!real :: rot(ND, ND), rotx(ND, ND), roty(ND, ND), rotz(ND, ND), ax, ay, az
 	real, allocatable :: r(:,:)
 
 	! TODO: add arg for filename.  Encapsulate in world struct?
@@ -895,51 +961,52 @@ subroutine write_step(w)
 		write(fid, "(i0)") w%bodies(ib)%geom%nv
 
 		! Copy and convert original vertex positions to 4-byte real
-		!
-		! TODO: translate from origin to COM (center of mass)
-		r = 1.0 * w%bodies(ib)%geom%v
+		r = w%bodies(ib)%geom%v
 
-		! Rotation angles about each axis
-		ax = w%bodies(ib)%ang(1)
-		ay = w%bodies(ib)%ang(2)
-		az = w%bodies(ib)%ang(3)
+		!! Rotation angles about each axis
+		!ax = w%bodies(ib)%ang(1)
+		!ay = w%bodies(ib)%ang(2)
+		!az = w%bodies(ib)%ang(3)
 
-		! Cardinal rotation matrices
+		!! Cardinal rotation matrices
 
-		rotx(:,1) = [1.0,      0.0,     0.0]
-		rotx(:,2) = [0.0,  cos(ax), sin(ax)]
-		rotx(:,3) = [0.0, -sin(ax), cos(ax)]
+		!rotx(:,1) = [1.0,      0.0,     0.0]
+		!rotx(:,2) = [0.0,  cos(ax), sin(ax)]
+		!rotx(:,3) = [0.0, -sin(ax), cos(ax)]
 
-		roty(:,1) = [cos(ay), 0.0, -sin(ay)]
-		roty(:,2) = [     0.0, 1.0,     0.0]
-		roty(:,3) = [sin(ay), 0.0,  cos(ay)]
+		!roty(:,1) = [cos(ay), 0.0, -sin(ay)]
+		!roty(:,2) = [     0.0, 1.0,     0.0]
+		!roty(:,3) = [sin(ay), 0.0,  cos(ay)]
 
-		rotz(:,1) = [ cos(az), sin(az), 0.0]
-		rotz(:,2) = [-sin(az), cos(az), 0.0]
-		rotz(:,3) = [     0.0,     0.0, 1.0]
+		!rotz(:,1) = [ cos(az), sin(az), 0.0]
+		!rotz(:,2) = [-sin(az), cos(az), 0.0]
+		!rotz(:,3) = [     0.0,     0.0, 1.0]
 
-		! First rotate about x, then about y, then about z
-		rot = matmul(rotz, matmul(roty, rotx))
-		!rot = matmul(rotx, matmul(roty, rotz))
+		!! First rotate about x, then about y, then about z
+		!rot = matmul(rotz, matmul(roty, rotx))
+		!!rot = matmul(rotx, matmul(roty, rotz))
 
-		! Rotate first and then translate by position
-		r = matmul(rot, r)  ! TODO: lapack
-		! TODO: translate back from COM to origin
+		!! Rotate first and then translate by com position
+		!r = matmul(rot, r)  ! TODO: lapack
 
-		!print *, "rot "
-		!print "(3es16.6)", rot
-		!print *, "size(w%bodies(ib)%geom%v) = ", size(w%bodies(ib)%geom%v)
-		!print *, "size(r) = ", size(r)
+		!!print *, "rot "
+		!!print "(3es16.6)", rot
+		!!print *, "size(w%bodies(ib)%geom%v) = ", size(w%bodies(ib)%geom%v)
+		!!print *, "size(r) = ", size(r)
 
-		! x, y, then z coords.  whitespace matters
+		!! x, y, then z coords.  whitespace matters
 
-		!write(fid, "(es16.6)") w%bodies(ib)%geom%v(1,:) + w%bodies(ib)%pos(1)
-		!write(fid, "(es16.6)") w%bodies(ib)%geom%v(2,:) + w%bodies(ib)%pos(2)
-		!write(fid, "(es16.6)") w%bodies(ib)%geom%v(3,:) + w%bodies(ib)%pos(3)
+		!!write(fid, "(es16.6)") w%bodies(ib)%geom%v(1,:) + w%bodies(ib)%pos(1)
+		!!write(fid, "(es16.6)") w%bodies(ib)%geom%v(2,:) + w%bodies(ib)%pos(2)
+		!!write(fid, "(es16.6)") w%bodies(ib)%geom%v(3,:) + w%bodies(ib)%pos(3)
 
-		write(fid, "(es16.6)") r(1,:) + w%bodies(ib)%pos(1)
-		write(fid, "(es16.6)") r(2,:) + w%bodies(ib)%pos(2)
-		write(fid, "(es16.6)") r(3,:) + w%bodies(ib)%pos(3)
+		!write(fid, "(es16.6)") r(1,:) + w%bodies(ib)%pos(1)
+		!write(fid, "(es16.6)") r(2,:) + w%bodies(ib)%pos(2)
+		!write(fid, "(es16.6)") r(3,:) + w%bodies(ib)%pos(3)
+
+		write(fid, "(es16.6)") r(1,:)
+		write(fid, "(es16.6)") r(2,:)
+		write(fid, "(es16.6)") r(3,:)
 
 		write(fid, "(a)") "tria3"
 		write(fid, "(i0)") w%bodies(ib)%geom%nt
