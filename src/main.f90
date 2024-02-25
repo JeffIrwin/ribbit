@@ -237,12 +237,13 @@ subroutine get_geom_inertia(g)
 	integer :: i
 
 	g%vol = 0.d0
+	g%com = 0.d0
 	do i = 1, g%nt
 
 		! Volume of a tetrahedron formed by triangle i and origin
-		vol_tet = vol_tet + dot_product(g%v(:, g%t(1,i)), &
-		                          cross(g%v(:, g%t(2,i)), &
-		                                g%v(:, g%t(3,i))))
+		vol_tet = dot_product(g%v(:, g%t(1,i)), &
+		                cross(g%v(:, g%t(2,i)), &
+		                      g%v(:, g%t(3,i))))
 
 		g%vol = g%vol + vol_tet
 
