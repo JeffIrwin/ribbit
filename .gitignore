@@ -4,6 +4,8 @@
 
 # output data
 /*.csv
+*.mp4
+*.avi
 
 /scratch
 

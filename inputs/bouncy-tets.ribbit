@@ -1,0 +1,28 @@
+{
+	"world":
+	{
+		"grav_accel": [0, 0, -9.807],
+		"t_start": 0,
+		"t_end"  : 20,
+		"dt": 0.01,
+		"bodies":
+		[
+			{
+				"geom": "inputs/tet.obj",
+				"pos": [0, 0, 1],
+				"vel": [0, 0, 0],
+				"ang": [0, 0, 0],
+				"ang_vel": [0, 0, 0],
+				"coef_rest": 0.95
+			},
+			{
+				"geom": "inputs/tet.obj",
+				"pos": [1.5, 0, 1],
+				"vel": [0, 0, 0.8],
+				"ang": [0, 45, 0],
+				"ang_vel": [0, 0, 0],
+				"coef_rest": 0.95
+			}
+		]
+	}
+}
