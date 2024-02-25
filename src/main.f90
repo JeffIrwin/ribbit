@@ -57,17 +57,21 @@ module ribbit
 		double precision, allocatable :: v(:,:)  ! vertices
 		integer, allocatable          :: t(:,:)  ! triangles
 
-		double precision :: com(ND)
-		double precision :: vol, mass
-		double precision :: inertia(ND, ND)  ! TODO
-
 	end type geom_t
+
+	!********
+
+	type mat_t
+		double precision :: coef_rest, dens
+	end type mat_t
 
 	!********
 
 	type body_t
 
 		type(geom_t) :: geom
+		!type(mat_t)  :: mat
+		integer :: mat
 
 		double precision :: pos(ND)
 		double precision :: vel(ND)
@@ -75,8 +79,11 @@ module ribbit
 		double precision :: ang(ND)
 		double precision :: ang_vel(ND)
 
-		! TODO: refactor into material struct
-		double precision :: coef_rest, dens
+		! TODO: delete com from struct?  Shouldn't need to save after translating
+		double precision :: com(ND)
+
+		double precision :: vol, mass
+		double precision :: inertia(ND, ND)  ! TODO
 
 	end type body_t
 
@@ -87,6 +94,7 @@ module ribbit
 		double precision :: grav_accel(ND)
 
 		type(body_t), allocatable :: bodies(:)
+		type(mat_t ), allocatable :: mats  (:)
 
 		double precision :: ground_z
 
@@ -223,51 +231,60 @@ end function cross
 
 !===============================================================================
 
-subroutine get_geom_inertia(g)
+subroutine get_inertia(b, w)
 	! TODO: take material argument
 
 	! Get mass, center of mass, volume, and inertia tensor
 
-	type(geom_t), intent(inout) :: g
+	type(body_t), intent(inout) :: b
+	type(world_t), intent(in)   :: w
 
 	!********
 
-	double precision :: vol_tet, com_tet(ND)
+	double precision :: vol_tet, com_tet(ND), vol, com(ND)
 
 	integer :: i
-
-	g%vol = 0.d0
-	g%com = 0.d0
-	do i = 1, g%nt
+	vol = 0.d0
+	com = 0.d0
+	do i = 1, b%geom%nt
 
 		! Volume of a tetrahedron formed by triangle i and origin
-		vol_tet = dot_product(g%v(:, g%t(1,i)), &
-		                cross(g%v(:, g%t(2,i)), &
-		                      g%v(:, g%t(3,i))))
+		vol_tet = dot_product(b%geom%v(:, b%geom%t(1,i)), &
+		                cross(b%geom%v(:, b%geom%t(2,i)), &
+		                      b%geom%v(:, b%geom%t(3,i))))
 
-		g%vol = g%vol + vol_tet
+		vol = vol + vol_tet
 
 		! Center of mass of this tetrahedron
 		com_tet = 0.25d0 * (   &
-			g%v(:, g%t(1,i)) + &
-			g%v(:, g%t(2,i)) + &
-			g%v(:, g%t(3,i)))
+			b%geom%v(:, b%geom%t(1,i)) + &
+			b%geom%v(:, b%geom%t(2,i)) + &
+			b%geom%v(:, b%geom%t(3,i)))
 
 		! Overall center of mass is weighted average
-		g%com = g%com + vol_tet * com_tet
+		com = com + vol_tet * com_tet
 
 		! TODO: get inertia tensor
 
 	end do
-	g%com = g%com / g%vol
-	g%vol = g%vol / 6.d0
+	com = com / vol
+	vol = vol / 6.d0
 
-	!g%mass = m%dens * g%vol  ! TODO
+	b%vol = vol
+	b%com = com
 
-	print *, "vol = ", g%vol
-	print *, "com = ", g%com
+	! Translate all vertices so that the center of mass is at the origin
+	do i = 1, b%geom%nv
+		b%geom%v(:,i) = b%geom%v(:,i) - com
+	end do
 
-end subroutine get_geom_inertia
+	b%mass = w%mats(b%mat)%dens * b%vol
+
+	print *, "vol  = ", b%vol
+	print *, "com  = ", com
+	print *, "mass = ", b%mass
+
+end subroutine get_inertia
 
 !===============================================================================
 
@@ -481,7 +498,7 @@ function read_world(filename, permissive) result(w)
 	character(len = :), allocatable :: geom_name
 	character(kind=json_CK, len = :), allocatable :: key, sval, path
 
-	integer :: ib
+	integer :: ib, im
 	integer(json_IK) :: ival, count_, count_gc, i, ic, igc, index_
 	integer, allocatable :: template(:), t2(:,:)
 
@@ -566,8 +583,8 @@ function read_world(filename, permissive) result(w)
 			w%bodies(ib)%vel = 0.d0
 			w%bodies(ib)%ang = 0.d0
 			w%bodies(ib)%ang_vel = 0.d0
+			w%bodies(ib)%mat = 1
 			!w%bodies(ib)%geom
-			w%bodies(ib)%coef_rest = 0.9d0  ! TODO: refactor into material struct
 
 			call json%get_child(p, ib, pc)
 
@@ -586,7 +603,6 @@ function read_world(filename, permissive) result(w)
 					!call json%get(pgc, "@", w%geom_name)
 					call json%get(pgc, "@", geom_name)
 					w%bodies(ib)%geom = read_geom(geom_name)
-					call get_geom_inertia(w%bodies(ib)%geom)
 
 				case ("pos")
 					w%bodies(ib)%pos = get_array(json, pgc, ND)
@@ -607,8 +623,43 @@ function read_world(filename, permissive) result(w)
 					w%bodies(ib)%ang_vel = get_array(json, pgc, ND)
 					!print *, "w%bodies(ib)%ang_vel", w%bodies(ib)%ang_vel
 
+				case ("mat")
+					call json%get(pgc, "@", w%bodies(ib)%mat)
+					print *, "mat = ", w%bodies(ib)%mat
+
+				case default
+					call bad_key(key, permissive)
+				end select
+
+			end do
+		end do
+
+	case ("mats")
+		count_ = json%count(p)
+		allocate(w%mats(count_))
+
+		do im = 1, count_
+
+			! Set defaults for each material
+			w%mats(im)%coef_rest = 0.9d0
+			w%mats(im)%dens      = 1000.d0
+
+			call json%get_child(p, im, pc)
+
+			! "grandchildren" count
+			count_gc = json%count(pc)
+			!print *, "count_gc = ", count_gc
+
+			do igc = 1, count_gc
+				call json%get_child(pc, igc, pgc)
+				call json%info(pgc, name = key)
+
+				select case (key)
 				case ("coef_rest")
-					call json%get(pgc, "@", w%bodies(ib)%coef_rest)
+					call json%get(pgc, "@", w%mats(im)%coef_rest)
+
+				case ("dens")
+					call json%get(pgc, "@", w%mats(im)%dens)
 
 				case default
 					call bad_key(key, permissive)
@@ -636,6 +687,24 @@ function read_world(filename, permissive) result(w)
 	!call exit(0)
 
 end function read_world
+
+!===============================================================================
+
+subroutine init_world(w)
+
+	type(world_t), intent(inout) :: w
+
+	!********
+
+	integer :: ib
+
+	! TODO: define 1 mat prop if not otherwise defined
+
+	do ib = 1, size(w%bodies)
+		call get_inertia(w%bodies(ib), w)
+	end do
+
+end subroutine init_world
 
 !===============================================================================
 
@@ -729,7 +798,7 @@ subroutine ribbit_run(w)
 			b%pos = p0 + 0.5 * (v0 + b%vel) * w%dt
 			if (b%pos(3) < w%ground_z) then
 				b%pos = p0
-				b%vel(3) =  -b%coef_rest * v0(3)
+				b%vel(3) =  -w%mats(b%mat)%coef_rest * v0(3)
 			end if
 
 			w%bodies(ib) = b
@@ -759,6 +828,8 @@ subroutine write_case(w)
 	integer :: fid, io, i, ib
 
 	! TODO: add arg for filename.  Encapsulate in world struct?
+	!
+	! TODO: mkdir.  wrap C fn?
 	case_file = "scratch/ribbit-1.case"
 
 	open(newunit = fid, file = case_file, action = "write", iostat = io)
@@ -803,6 +874,8 @@ subroutine write_step(w)
 	real, allocatable :: r(:,:)
 
 	! TODO: add arg for filename.  Encapsulate in world struct?
+	!
+	! TODO: mkdir.  wrap C fn?
 	geom_file = "scratch/ribbit-1-"//to_str(w%it)//".geo"
 	open(newunit = fid, file = geom_file, action = "write", iostat = io)
 	call handle_open_write_io(geom_file, io)
@@ -908,6 +981,7 @@ program main
 
 	args  = read_args()
 	world = read_world(args%ribbit_file, args%permissive)
+	call init_world(world)
 
 	call ribbit_run(world)
 	call ribbit_exit(EXIT_SUCCESS)

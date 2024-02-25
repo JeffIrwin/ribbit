@@ -1,19 +1,18 @@
 {
 	"world":
 	{
-		"grav_accel": [0, 0, -9.807],
+		"grav_accel": [0, 0, -9.807],  # m/s^2
 		"t_start": 0,
-		"t_end"  : 20,
+		"t_end"  : 20, # s
 		"dt": 0.01,
 		"bodies":
 		[
 			{
 				"geom": "inputs/tet.obj",
-				"pos": [0, 0, 1],
+				"pos": [0, 0, 1], # m
 				"vel": [0, 0, 0],
 				"ang": [0, 0, 0],
 				"ang_vel": [0, 0, 0],
-				"coef_rest": 0.95
 			},
 			{
 				"geom": "inputs/tet.obj",
@@ -21,7 +20,14 @@
 				"vel": [0, 0, 0.8],
 				"ang": [0, 45, 0],
 				"ang_vel": [0, 0, 0],
-				"coef_rest": 0.95
+				"mat": 1
+			}
+		],
+		"mats":
+		[
+			{
+				"coef_rest": 0.94,
+				"dens": 2500.0 # kg/m^3
 			}
 		]
 	}
