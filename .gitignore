@@ -1,6 +1,7 @@
 
-# exe
+# exe and build output
 /ribbit
+/tools/conv/build/
 
 # output data
 /*.csv

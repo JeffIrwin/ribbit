@@ -6,7 +6,8 @@ pushd tools/conv/
 
 cmake --version
 
-cmake CMakeLists.txt
+#cmake CMakeLists.txt
+cmake -B build -S .
 cmake --build .
 
 popd
