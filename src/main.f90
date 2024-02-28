@@ -1034,6 +1034,121 @@ end subroutine ribbit_exit
 
 !===============================================================================
 
+subroutine test_inertia()
+	! TODO: testing only
+	!
+	! Ref:  https://thescipub.com/pdf/jmssp.2005.8.11.pdf
+
+	double precision :: v(ND, 4), x(4), y(4), z(4)
+
+	double precision :: com(ND), a, b, c, ap, bp, cp, vol
+
+	integer :: i, j
+
+	v(:,1) = [ 8.33220, -11.86875,  0.93355]
+	v(:,2) = [ 0.75523,   5.00000, 16.37072]
+	v(:,3) = [52.61236,   5.00000, -5.38580]
+	v(:,4) = [ 2.00000,   5.00000,  3.00000]
+
+	! Expected centroid: [15.92492, 0.78281, 3.72962]
+	!
+	! Expected inertia components:
+	!
+	!     a/µ = 43520.33257 m**5
+	!     b/µ = 194711.28938 m**5
+	!     c/µ = 191168.76173 m**5
+	!     a’/µ = 4417.66150 m**5
+	!     b’/µ = -46343.16662 m**5
+	!     c’/µ = 11996.20119 m**5
+	!
+	! where µ is density.
+	!
+	! Components are arranged in inertia tensor like this:
+	!
+	! [  a , -b', -c' ]
+	! [ -b',  b , -a' ]
+	! [ -c', -a',  c  ]
+
+	com = sum(v, 2) / size(v, 2)
+	print *, "com = ", com
+
+	vol = dot_product(cross( &
+		v(:,2) - v(:,1) ,    &
+		v(:,3) - v(:,1)),    &
+		v(:,4) - v(:,1)) / 6.d0
+
+	x = v(1,:) - com(1)
+	y = v(2,:) - com(2)
+	z = v(3,:) - com(3)
+
+	!a = 6.d0 * vol * ( &
+	!	y(1) ** 2 + y(1) * y(2) + y(2) ** 2 + y(1) * y(3) + y(2) * y(3) + &
+	!	y(3) ** 2 + y(1) * y(4) + y(2) * y(4) + y(3) * y(4) + y(4) ** 2 + &
+	!	z(1) ** 2 + z(1) * z(2) + z(2) ** 2 + z(1) * z(3) + z(2) * z(3) + &
+	!	z(3) ** 2 + z(1) * z(4) + z(2) * z(4) + z(3) * z(4) + z(4) ** 2 &
+	!	) / 60.d0
+
+	!a = 6.d0 * vol * ( &
+	!	y(1) ** 2 + y(1) * y(2) + y(1) * y(3) + y(1) * y(4) + &
+	!	y(2) ** 2 + y(2) * y(3) + y(2) * y(4) + &
+	!	y(3) ** 2 + y(3) * y(4) + &
+	!	y(4) ** 2 + &
+	!	z(1) ** 2 + z(1) * z(2) + z(1) * z(3) + z(1) * z(4) + &
+	!	z(2) ** 2 + z(2) * z(3) + z(2) * z(4) + &
+	!	z(3) ** 2 + z(3) * z(4) + &
+	!	z(4) ** 2 &
+	!	) / 60.d0
+
+	!ap = 6.d0 * vol * ( &
+	!	2 * y(1) * z(1) + y(2) * z(1) + y(3) * z(1) + y(4) * z(1) + y(1) * z(2) + &
+	!	2 * y(2) * z(2) + y(3) * z(2) + y(4) * z(2) + y(1) * z(3) + y(2) * z(3) + 2 * y(3) * z(3) + &
+	!	y(4) * z(3) + y(1) * z(4) + y(2) * z(4) + y(3) * z(4) + 2 * y(4) * z(4) & 
+	!	) / 120.d0
+
+	a = 0.d0
+	b = 0.d0
+	do i = 1, 4
+	do j = 1, i
+		a = a + y(i) * y(j) + z(i) * z(j)
+		b = b + z(i) * z(j) + x(i) * x(j)
+		c = c + x(i) * x(j) + y(i) * y(j)
+	end do
+	end do
+	a = vol * a / 10
+	b = vol * b / 10
+	c = vol * c / 10
+
+	ap = 0.d0
+	bp = 0.d0
+	cp = 0.d0
+	do i = 1, 4
+		ap = ap + y(i) * z(i)
+		bp = bp + z(i) * x(i)
+		cp = cp + x(i) * y(i)
+		do j = 1, 4
+			ap = ap + y(i) * z(j)
+			bp = bp + z(i) * x(j)
+			cp = cp + x(i) * y(j)
+		end do
+	end do
+	ap = vol * ap / 20
+	bp = vol * bp / 20
+	cp = vol * cp / 20
+
+	print *, "a = ", a
+	print *, "b = ", b
+	print *, "c = ", c
+
+	print *, "ap = ", ap
+	print *, "bp = ", bp
+	print *, "cp = ", cp
+
+	call ribbit_exit(EXIT_SUCCESS)
+
+end subroutine test_inertia
+
+!===============================================================================
+
 end module ribbit
 
 !===============================================================================
@@ -1044,6 +1159,8 @@ program main
 
 	type(args_t)  :: args
 	type(world_t) :: world
+
+	!call test_inertia()
 
 	args  = read_args()
 	world = read_world(args%ribbit_file, args%permissive)

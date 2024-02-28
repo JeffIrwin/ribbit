@@ -36,8 +36,8 @@ jobs:
         FPM_FC: gfortran-12
       run: |
         mkdir scratch
-        fpm run --profile debug   -- inputs/bouncy-tet.ribbit
-        fpm run --profile release -- inputs/bouncy-tet.ribbit
+        fpm run --profile debug   -- inputs/bouncy-tets.ribbit
+        fpm run --profile release -- inputs/bouncy-tets.ribbit
 
     #- if: matrix.os == 'ubuntu-latest'
     #  run: |
