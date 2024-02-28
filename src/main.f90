@@ -233,60 +233,161 @@ end function cross
 
 !===============================================================================
 
-subroutine get_inertia(b, w)
-	! TODO: take material argument
+subroutine get_inertia(bo, w)
 
 	! Get mass, center of mass, volume, and inertia tensor
 
-	type(body_t), intent(inout) :: b
+	type(body_t), intent(inout) :: bo
 	type(world_t), intent(in)   :: w
 
 	!********
 
 	double precision :: vol_tet, com_tet(ND), vol, com(ND)
+	double precision :: v(ND, 4), x(4), y(4), z(4)
+	double precision :: a, b, c, ap, bp, cp
 
-	integer :: i
+	integer :: i, j, k
+
+	!v(:,1) = [ 8.33220, -11.86875,  0.93355]
+	!v(:,2) = [ 0.75523,   5.00000, 16.37072]
+	!v(:,3) = [52.61236,   5.00000, -5.38580]
+	!v(:,4) = [ 2.00000,   5.00000,  3.00000]
+
+	!com = sum(v, 2) / size(v, 2)
+	!print *, "com = ", com
+
+	!vol = dot_product(cross( &
+	!	v(:,2) - v(:,1) ,    &
+	!	v(:,3) - v(:,1)),    &
+	!	v(:,4) - v(:,1)) / 6.d0
+
 	vol = 0.d0
 	com = 0.d0
-	do i = 1, b%geom%nt
+	do i = 1, bo%geom%nt
 
 		! 6 * volume of a tetrahedron formed by triangle i and origin
 		vol_tet = dot_product(cross(    &
-			b%geom%v(:, b%geom%t(1,i)), &
-			b%geom%v(:, b%geom%t(2,i))), &
-			b%geom%v(:, b%geom%t(3,i)))
+			bo%geom%v(:, bo%geom%t(1,i)), &
+			bo%geom%v(:, bo%geom%t(2,i))), &
+			bo%geom%v(:, bo%geom%t(3,i)))
 
 		vol = vol + vol_tet
 
 		! Center of mass of this tetrahedron
-		com_tet = 0.25d0 * sum(b%geom%v(:, b%geom%t(:,i)), 2)
+		com_tet = 0.25d0 * sum(bo%geom%v(:, bo%geom%t(:,i)), 2)
 
 		! Overall center of mass is weighted average
 		com = com + vol_tet * com_tet
-
-		! TODO: get inertia tensor
 
 	end do
 	com = com / vol
 	vol = vol / 6.d0
 
-	b%vol = vol
-	!b%com = com
+	bo%vol = vol
+	!bo%com = com
+
+	! Now that the overall center of mass is known, do another loop to get the
+	! inertia tensor (relative to overall com)
+	bo%inertia = 0.d0
+	do i = 1, bo%geom%nt
+
+		! Repeat volume calculation.  Could be saved in array.  Time/space
+		! tradeoff
+		vol_tet = dot_product(cross(    &
+			bo%geom%v(:, bo%geom%t(1,i)), &
+			bo%geom%v(:, bo%geom%t(2,i))), &
+			bo%geom%v(:, bo%geom%t(3,i)))
+		vol_tet = vol_tet / 6.d0
+
+		!vol = vol + vol_tet
+
+		!! Center of mass of this tetrahedron
+		!com_tet = 0.25d0 * sum(bo%geom%v(:, bo%geom%t(:,i)), 2)
+
+		!! Overall center of mass is weighted average
+		!com = com + vol_tet * com_tet
+
+		! TODO: get rid of x, y, and z vars.  Also maybe v?
+		v(:, 1:3) = bo%geom%v(:, bo%geom%t(:,i))
+		v(:,   4) = 0.d0
+
+		!x = v(1,:) - com_tet(1)
+		!y = v(2,:) - com_tet(2)
+		!z = v(3,:) - com_tet(3)
+		x = v(1,:) - com(1)
+		y = v(2,:) - com(2)
+		z = v(3,:) - com(3)
+
+		a = 0.d0
+		b = 0.d0
+		c = 0.d0
+		do k = 1, 4
+		do j = 1, k
+			a = a + y(k) * y(j) + z(k) * z(j)
+			b = b + z(k) * z(j) + x(k) * x(j)
+			c = c + x(k) * x(j) + y(k) * y(j)
+		end do
+		end do
+		a = vol_tet * a / 10
+		b = vol_tet * b / 10
+		c = vol_tet * c / 10
+
+		ap = 0.d0
+		bp = 0.d0
+		cp = 0.d0
+		do k = 1, 4
+			ap = ap + y(k) * z(k)
+			bp = bp + z(k) * x(k)
+			cp = cp + x(k) * y(k)
+			do j = 1, 4
+				ap = ap + y(k) * z(j)
+				bp = bp + z(k) * x(j)
+				cp = cp + x(k) * y(j)
+			end do
+		end do
+		ap = vol_tet * ap / 20
+		bp = vol_tet * bp / 20
+		cp = vol_tet * cp / 20
+
+		print *, "a = ", a
+		print *, "b = ", b
+		print *, "c = ", c
+
+		print *, "ap = ", ap
+		print *, "bp = ", bp
+		print *, "cp = ", cp
+
+		! Components are arranged in inertia tensor like this:
+		!
+		! [  a , -b', -c' ]
+		! [ -b',  b , -a' ]
+		! [ -c', -a',  c  ]
+
+		bo%inertia(1,1) = bo%inertia(1,1) + a
+		bo%inertia(2,2) = bo%inertia(2,2) + b
+		bo%inertia(3,3) = bo%inertia(3,3) + c
+		! TODO: ap, bp, cp off -diagonal terms
+
+	end do
+
+	bo%inertia = bo%inertia * w%matls(bo%matl)%dens
+	print *, "bo%inertia = "
+	print "(3es16.6)", bo%inertia
 
 	! Translate all vertices so that the center of mass is at the origin
-	do i = 1, b%geom%nv
-		b%geom%v(:,i) = b%geom%v(:,i) - com
+	do i = 1, bo%geom%nv
+		bo%geom%v(:,i) = bo%geom%v(:,i) - com
 	end do
 
 	! Backup original vertex locations so that rounding errors do not warp the
 	! shape of the body
-	b%geom%v0 = b%geom%v
+	bo%geom%v0 = bo%geom%v
 
-	b%mass = w%matls(b%matl)%dens * b%vol
+	bo%mass = w%matls(bo%matl)%dens * bo%vol
 
-	print *, "vol  = ", b%vol
+	print *, "vol  = ", bo%vol
 	print *, "com  = ", com
-	print *, "mass = ", b%mass
+	print *, "mass = ", bo%mass
 
 end subroutine get_inertia
 
@@ -1081,32 +1182,9 @@ subroutine test_inertia()
 	y = v(2,:) - com(2)
 	z = v(3,:) - com(3)
 
-	!a = 6.d0 * vol * ( &
-	!	y(1) ** 2 + y(1) * y(2) + y(2) ** 2 + y(1) * y(3) + y(2) * y(3) + &
-	!	y(3) ** 2 + y(1) * y(4) + y(2) * y(4) + y(3) * y(4) + y(4) ** 2 + &
-	!	z(1) ** 2 + z(1) * z(2) + z(2) ** 2 + z(1) * z(3) + z(2) * z(3) + &
-	!	z(3) ** 2 + z(1) * z(4) + z(2) * z(4) + z(3) * z(4) + z(4) ** 2 &
-	!	) / 60.d0
-
-	!a = 6.d0 * vol * ( &
-	!	y(1) ** 2 + y(1) * y(2) + y(1) * y(3) + y(1) * y(4) + &
-	!	y(2) ** 2 + y(2) * y(3) + y(2) * y(4) + &
-	!	y(3) ** 2 + y(3) * y(4) + &
-	!	y(4) ** 2 + &
-	!	z(1) ** 2 + z(1) * z(2) + z(1) * z(3) + z(1) * z(4) + &
-	!	z(2) ** 2 + z(2) * z(3) + z(2) * z(4) + &
-	!	z(3) ** 2 + z(3) * z(4) + &
-	!	z(4) ** 2 &
-	!	) / 60.d0
-
-	!ap = 6.d0 * vol * ( &
-	!	2 * y(1) * z(1) + y(2) * z(1) + y(3) * z(1) + y(4) * z(1) + y(1) * z(2) + &
-	!	2 * y(2) * z(2) + y(3) * z(2) + y(4) * z(2) + y(1) * z(3) + y(2) * z(3) + 2 * y(3) * z(3) + &
-	!	y(4) * z(3) + y(1) * z(4) + y(2) * z(4) + y(3) * z(4) + 2 * y(4) * z(4) & 
-	!	) / 120.d0
-
 	a = 0.d0
 	b = 0.d0
+	c = 0.d0
 	do i = 1, 4
 	do j = 1, i
 		a = a + y(i) * y(j) + z(i) * z(j)

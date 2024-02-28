@@ -1,0 +1,27 @@
+{
+	"world":
+	{
+		"grav_accel": [0, 0, -9.807],  # m/s^2
+		"t_start": 0,
+		"t_end"  : 20, # s
+		"dt": 0.01,
+		"bodies":
+		[
+			{
+				"geom": "inputs/block.obj",
+				"pos": [2, 0, 1],
+				"vel": [0, 0, 0.8],
+				"ang": [0, 0, 0],
+				"ang_vel": [0, 0, -90],
+				"matl": 1
+			}
+		],
+		"matls":
+		[
+			{
+				"coef_rest": 0.94,
+				"dens": 2500.0 # kg/m^3
+			}
+		]
+	}
+}
