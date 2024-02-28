@@ -63,17 +63,17 @@ module ribbit
 
 	!********
 
-	type mat_t
+	type matl_t
 		double precision :: coef_rest, dens
-	end type mat_t
+	end type matl_t
 
 	!********
 
 	type body_t
 
 		type(geom_t) :: geom
-		!type(mat_t)  :: mat
-		integer :: mat
+		!type(matl_t)  :: matl
+		integer :: matl  ! index of world%matls(:) array
 
 		double precision :: pos(ND)
 		double precision :: vel(ND)
@@ -96,7 +96,7 @@ module ribbit
 		double precision :: grav_accel(ND)
 
 		type(body_t), allocatable :: bodies(:)
-		type(mat_t ), allocatable :: mats  (:)
+		type(matl_t), allocatable :: matls (:)
 
 		double precision :: ground_z
 
@@ -250,18 +250,16 @@ subroutine get_inertia(b, w)
 	com = 0.d0
 	do i = 1, b%geom%nt
 
-		! Volume of a tetrahedron formed by triangle i and origin
-		vol_tet = dot_product(b%geom%v(:, b%geom%t(1,i)), &
-		                cross(b%geom%v(:, b%geom%t(2,i)), &
-		                      b%geom%v(:, b%geom%t(3,i))))
+		! 6 * volume of a tetrahedron formed by triangle i and origin
+		vol_tet = dot_product(cross(    &
+			b%geom%v(:, b%geom%t(1,i)), &
+			b%geom%v(:, b%geom%t(2,i))), &
+			b%geom%v(:, b%geom%t(3,i)))
 
 		vol = vol + vol_tet
 
 		! Center of mass of this tetrahedron
-		com_tet = 0.25d0 * (   &
-			b%geom%v(:, b%geom%t(1,i)) + &
-			b%geom%v(:, b%geom%t(2,i)) + &
-			b%geom%v(:, b%geom%t(3,i)))
+		com_tet = 0.25d0 * sum(b%geom%v(:, b%geom%t(:,i)), 2)
 
 		! Overall center of mass is weighted average
 		com = com + vol_tet * com_tet
@@ -284,7 +282,7 @@ subroutine get_inertia(b, w)
 	! shape of the body
 	b%geom%v0 = b%geom%v
 
-	b%mass = w%mats(b%mat)%dens * b%vol
+	b%mass = w%matls(b%matl)%dens * b%vol
 
 	print *, "vol  = ", b%vol
 	print *, "com  = ", com
@@ -589,7 +587,7 @@ function read_world(filename, permissive) result(w)
 			w%bodies(ib)%vel = 0.d0
 			w%bodies(ib)%ang = 0.d0
 			w%bodies(ib)%ang_vel = 0.d0
-			w%bodies(ib)%mat = 1
+			w%bodies(ib)%matl = 1
 			!w%bodies(ib)%geom
 
 			call json%get_child(p, ib, pc)
@@ -632,9 +630,9 @@ function read_world(filename, permissive) result(w)
 					! Convert from degrees to radians
 					w%bodies(ib)%ang_vel = PI / 180.d0 * w%bodies(ib)%ang_vel
 
-				case ("mat")
-					call json%get(pgc, "@", w%bodies(ib)%mat)
-					print *, "mat = ", w%bodies(ib)%mat
+				case ("matl")
+					call json%get(pgc, "@", w%bodies(ib)%matl)
+					print *, "matl = ", w%bodies(ib)%matl
 
 				case default
 					call bad_key(key, permissive)
@@ -643,15 +641,15 @@ function read_world(filename, permissive) result(w)
 			end do
 		end do
 
-	case ("mats")
+	case ("matls")
 		count_ = json%count(p)
-		allocate(w%mats(count_))
+		allocate(w%matls(count_))
 
 		do im = 1, count_
 
 			! Set defaults for each material
-			w%mats(im)%coef_rest = 0.9d0
-			w%mats(im)%dens      = 1000.d0
+			w%matls(im)%coef_rest = 0.9d0
+			w%matls(im)%dens      = 1000.d0
 
 			call json%get_child(p, im, pc)
 
@@ -665,10 +663,10 @@ function read_world(filename, permissive) result(w)
 
 				select case (key)
 				case ("coef_rest")
-					call json%get(pgc, "@", w%mats(im)%coef_rest)
+					call json%get(pgc, "@", w%matls(im)%coef_rest)
 
 				case ("dens")
-					call json%get(pgc, "@", w%mats(im)%dens)
+					call json%get(pgc, "@", w%matls(im)%dens)
 
 				case default
 					call bad_key(key, permissive)
@@ -707,7 +705,7 @@ subroutine init_world(w)
 
 	integer :: ib
 
-	! TODO: define 1 mat prop if not otherwise defined
+	! TODO: define 1 matl prop if not otherwise defined
 
 	do ib = 1, size(w%bodies)
 		call get_inertia(w%bodies(ib), w)
@@ -812,7 +810,7 @@ subroutine ribbit_run(w)
 			!if (b%pos(3) < w%ground_z) then
 			if (minval(b%geom%v(3,:)) < w%ground_z) then
 				b%pos = p0
-				b%vel(3) =  -w%mats(b%mat)%coef_rest * v0(3)
+				b%vel(3) = -w%matls(b%matl)%coef_rest * v0(3)
 				call update_pose(b)
 			end if
 
@@ -866,7 +864,8 @@ subroutine update_pose(b)
 	rotz(:,3) = [    0.d0,    0.d0, 1.d0]
 
 	! First rotate about x, then about y, then about z
-	rot = matmul(rotz, matmul(roty, rotx))
+	rot = matmul(matmul(rotz, roty), rotx)
+	!rot = matmul(rotz, matmul(roty, rotx))
 	!rot = matmul(rotx, matmul(roty, rotz))
 
 	! Rotate first and then translate by com position
