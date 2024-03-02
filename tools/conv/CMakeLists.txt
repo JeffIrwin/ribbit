@@ -7,7 +7,6 @@ project(${CONV})
 include(FetchContent)
 FetchContent_Declare(
 	assimp
-	#GIT_REPOSITORY https://github.com/assimp/assimp
 	GIT_REPOSITORY https://github.com/JeffIrwin/assimp
 	GIT_TAG        01231d0e6001f555c81dcfcc6c581fa5797ccac9
 )
