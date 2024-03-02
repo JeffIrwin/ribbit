@@ -12,7 +12,7 @@
 				"pos": [0, 0, 1], # m
 				"vel": [0, 0, 0],
 				"ang": [0, 0, 0], # degrees
-				"ang_vel": [0, 0, 200],  # degrees/s
+				"ang_vel": [200, 200, 200],  # degrees/s
 			},
 			{
 				"geom": "inputs/tet.obj",

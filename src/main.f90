@@ -78,11 +78,9 @@ module ribbit
 		double precision :: pos(ND)
 		double precision :: vel(ND)
 
-		double precision :: ang(ND)
+		!double precision :: ang(ND)
+		double precision :: rot(ND, ND)
 		double precision :: ang_vel(ND)
-
-		!! delete com from struct?  Shouldn't need to save after translating
-		!double precision :: com(ND)
 
 		double precision :: vol, mass
 		double precision :: inertia(ND, ND)  ! TODO
@@ -285,21 +283,11 @@ subroutine get_inertia(b, w)
 			b%geom%v(:, b%geom%t(3,i)))
 		vol_tet = vol_tet / 6.d0
 
-		!vol = vol + vol_tet
-
-		!! Center of mass of this tetrahedron
-		!com_tet = 0.25d0 * sum(b%geom%v(:, b%geom%t(:,i)), 2)
-
-		!! Overall center of mass is weighted average
-		!com = com + vol_tet * com_tet
-
-		! TODO: get rid of x, y, and z vars.  Also maybe v?
+		! TODO: get rid of v temp var.  Also move this outer loop *after*
+		! translating all verts by com.
 		v(:, 1:3) = b%geom%v(:, b%geom%t(:,i))
 		v(:,   4) = 0.d0
 
-		!x = v(1,:) - com_tet(1)
-		!y = v(2,:) - com_tet(2)
-		!z = v(3,:) - com_tet(3)
 		x = v(1,:) - com(1)
 		y = v(2,:) - com(2)
 		z = v(3,:) - com(3)
@@ -336,13 +324,12 @@ subroutine get_inertia(b, w)
 		izx = vol_tet * izx / 20
 		ixy = vol_tet * ixy / 20
 
-		print *, "ixx = ", ixx
-		print *, "iyy = ", iyy
-		print *, "izz = ", izz
-
-		print *, "iyz = ", iyz
-		print *, "izx = ", izx
-		print *, "ixy = ", ixy
+		!print *, "ixx = ", ixx
+		!print *, "iyy = ", iyy
+		!print *, "izz = ", izz
+		!print *, "iyz = ", iyz
+		!print *, "izx = ", izx
+		!print *, "ixy = ", ixy
 
 		! Components are arranged in inertia tensor like this:
 		!
@@ -596,6 +583,8 @@ function read_world(filename, permissive) result(w)
 	character(len = :), allocatable :: geom_name
 	character(kind=json_CK, len = :), allocatable :: key, sval, path
 
+	double precision :: ang(ND)
+
 	integer :: ib, im
 	integer(json_IK) :: ival, count_, count_gc, i, ic, igc, index_
 	integer, allocatable :: template(:), t2(:,:)
@@ -679,10 +668,10 @@ function read_world(filename, permissive) result(w)
 			! Set defaults for each body
 			w%bodies(ib)%pos = 0.d0
 			w%bodies(ib)%vel = 0.d0
-			w%bodies(ib)%ang = 0.d0
 			w%bodies(ib)%ang_vel = 0.d0
 			w%bodies(ib)%matl = 1
 			!w%bodies(ib)%geom
+			ang = 0.d0
 
 			call json%get_child(p, ib, pc)
 
@@ -711,11 +700,10 @@ function read_world(filename, permissive) result(w)
 					!print *, "w%bodies(ib)%vel", w%bodies(ib)%vel
 
 				case ("ang")
-					w%bodies(ib)%ang = get_array(json, pgc, ND)
-					!print *, "w%bodies(ib)%ang", w%bodies(ib)%ang
+					ang = get_array(json, pgc, ND)
 
-					! Convert from degrees to radians
-					w%bodies(ib)%ang = PI / 180.d0 * w%bodies(ib)%ang
+					! Convert from degrees to radians, and then to rotation matrix
+					w%bodies(ib)%rot = get_rot(PI / 180.d0 * ang)
 
 				case ("ang_vel")
 					w%bodies(ib)%ang_vel = get_array(json, pgc, ND)
@@ -898,8 +886,18 @@ subroutine ribbit_run(w)
 			p0 = b%pos
 			b%pos = p0 + 0.5 * (v0 + b%vel) * w%dt
 
-			b%ang = modulo(b%ang + b%ang_vel * w%dt, 2 * PI)
+			! Update rotations by multiplying by a rotation matrix, not by
+			! adding vector3's!
+			b%rot = matmul(b%rot, get_rot(b%ang_vel * w%dt))
+			!b%ang = modulo(b%ang + b%ang_vel * w%dt, 2 * PI)
+
+			! Rounding errors might accumulate after many time steps.
+			! Re-orthonormalize just in case
+			call gram_schmidt(b%rot)
+
 			call update_pose(b)
+			!print *, "rot = "
+			!print "(3es16.6)", b%rot
 
 			!if (b%pos(3) < w%ground_z) then
 			if (minval(b%geom%v(3,:)) < w%ground_z) then
@@ -924,24 +922,46 @@ end subroutine ribbit_run
 
 !===============================================================================
 
-subroutine update_pose(b)
+subroutine gram_schmidt(a)
 
-	type(body_t), intent(inout)  :: b
+	! Could be generalized to higher dimensions
+
+	double precision, intent(inout) :: a(ND, ND)
+
+	a(:,2) = a(:,2) - project(a(:,2), a(:,1))
+	a(:,3) = a(:,3) - project(a(:,3), a(:,1)) - project(a(:,3), a(:,2))
+
+end subroutine gram_schmidt
+
+!===============================================================================
+
+function project(v, u) result(w)
+	double precision, intent(in) :: v(:), u(:)
+	double precision, allocatable :: w(:)
+
+	! Project v onto u
+	w = dot_product(v, u) / dot_product(u, u) * u
+
+end function project
+
+!===============================================================================
+
+function get_rot(ang) result(rot)
+
+	! Convert a vector3 ang to a rotation matrix rot
+
+	double precision, intent(in) :: ang(ND)
+	double precision :: rot(ND, ND)
 
 	!********
 
-	integer :: i
-
 	double precision :: ax, ay, az, &
-		rot(ND, ND), rotx(ND, ND), roty(ND, ND), rotz(ND, ND)
-	!double precision, allocatable :: r(:,:)
-
-	!b%geom%v = b%geom%v0
+		rotx(ND, ND), roty(ND, ND), rotz(ND, ND)
 
 	! Rotation angles about each axis
-	ax = b%ang(1)
-	ay = b%ang(2)
-	az = b%ang(3)
+	ax = ang(1)
+	ay = ang(2)
+	az = ang(3)
 
 	! Cardinal rotation matrices
 
@@ -962,11 +982,23 @@ subroutine update_pose(b)
 	!rot = matmul(rotz, matmul(roty, rotx))
 	!rot = matmul(rotx, matmul(roty, rotz))
 
-	! Rotate first and then translate by com position
-	b%geom%v = matmul(rot, b%geom%v0)  ! TODO: lapack
-
 	!print *, "rot "
 	!print "(3es16.6)", rot
+
+end function get_rot
+
+!===============================================================================
+
+subroutine update_pose(b)
+
+	type(body_t), intent(inout)  :: b
+
+	!********
+
+	integer :: i
+
+	! Rotate first and then translate by com position
+	b%geom%v = matmul(b%rot, b%geom%v0)  ! TODO: lapack
 
 	b%geom%v(1,:) = b%geom%v(1,:) + b%pos(1)
 	b%geom%v(2,:) = b%geom%v(2,:) + b%pos(2)
