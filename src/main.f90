@@ -854,7 +854,7 @@ subroutine ribbit_run(w)
 
 	character(len = :), allocatable :: csv_file
 
-	double precision :: p0(ND), v0(ND)
+	double precision :: p0(ND), v0(ND), rot0(ND, ND)
 	double precision :: vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, &
 		i1(ND, ND), jr(ND), jr_mag, e
 
@@ -888,7 +888,9 @@ subroutine ribbit_run(w)
 			v0 = b%vel
 			b%vel = v0 + w%grav_accel * w%dt
 
-			p0 = b%pos
+			p0   = b%pos
+			rot0 = b%rot
+
 			b%pos = p0 + 0.5 * (v0 + b%vel) * w%dt
 
 			! Update rotations by multiplying by a rotation matrix, not by
@@ -946,7 +948,7 @@ subroutine ribbit_run(w)
 				!print *, "b%ang_vel", b%ang_vel
 
 				b%pos = p0
-				! TODO: reset b%rot to pre-contact orientation?
+				b%rot = rot0
 
 				!b%pos = p0
 				!b%vel(3) = -w%matls(b%matl)%coef_rest * v0(3)
