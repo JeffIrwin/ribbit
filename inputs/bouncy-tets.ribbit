@@ -5,6 +5,8 @@
 		"t_start": 0,
 		"t_end"  : 20, # s
 		"dt": 0.01,
+		#"ground_pos": [0, 0, -0.5],
+		"ground_nrm": [0, 0.1, 0.9],
 		"bodies":
 		[
 			{

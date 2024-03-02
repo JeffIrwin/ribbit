@@ -96,7 +96,9 @@ module ribbit
 		type(body_t), allocatable :: bodies(:)
 		type(matl_t), allocatable :: matls (:)
 
-		double precision :: ground_z
+		!double precision :: ground_z
+		double precision :: ground_pos(ND)
+		double precision :: ground_nrm(ND)
 
 		! Input time bounds and step size
 		double precision :: t_start, t_end, dt
@@ -631,7 +633,9 @@ function read_world(filename, permissive) result(w)
 
 	! Set world defaults
 	w%grav_accel = 0.d0
-	w%ground_z = 0.d0
+	!w%ground_z = 0.d0
+	w%ground_pos = 0.d0
+	w%ground_nrm = [0, 0, 1]
 	w%t_start = 0.d0
 	w%t_end = 1.d0
 	w%dt = 0.1d0
@@ -654,9 +658,13 @@ function read_world(filename, permissive) result(w)
 		!print *, "w%t_end = ", w%t_end
 
 	case ("grav_accel")
-
 		w%grav_accel = get_array(json, p, ND)
 		!print *, "grav_accel = ", w%grav_accel
+
+	case ("ground_pos")
+		w%ground_pos = get_array(json, p, ND)
+	case ("ground_nrm")
+		w%ground_nrm = get_array(json, p, ND)
 
 	case ("bodies")
 		count_ = json%count(p)
@@ -900,10 +908,14 @@ subroutine ribbit_run(w)
 			!print "(3es16.6)", b%rot
 
 			!if (b%pos(3) < w%ground_z) then
-			if (minval(b%geom%v(3,:)) < w%ground_z) then
+			!if (minval(b%geom%v(3,:)) < w%ground_z) then
+			if (minval(matmul(w%ground_nrm, &
+				b%geom%v - spread(w%ground_pos, 2, b%geom%nv))) <= 0) then
+
 				b%pos = p0
 				b%vel(3) = -w%matls(b%matl)%coef_rest * v0(3)
 				call update_pose(b)
+
 			end if
 
 			w%bodies(ib) = b
