@@ -711,6 +711,8 @@ function read_world(filename, permissive) result(w)
 					ang = get_array(json, pgc, ND)
 
 					! Convert from degrees to radians, and then to rotation matrix
+					!
+					! TODO: initialize rot by default ang above
 					w%bodies(ib)%rot = get_rot(PI / 180.d0 * ang)
 
 				case ("ang_vel")
@@ -860,11 +862,13 @@ subroutine ribbit_run(w)
 	character(len = :), allocatable :: csv_file
 
 	double precision :: p0(ND), v0(ND)
+	double precision :: vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, &
+		i1(ND, ND), jr(ND), jr_mag, e
 
 	integer :: ib, i, io
 	integer :: fid
 
-	logical :: found
+	logical :: found, colliding
 
 	type(body_t)  :: b
 
@@ -907,13 +911,69 @@ subroutine ribbit_run(w)
 			!print *, "rot = "
 			!print "(3es16.6)", b%rot
 
+			colliding = .false.
+			do i = 1, b%geom%nv
+				if (dot_product(w%ground_nrm, b%geom%v(:,i) - w%ground_pos) <= 0) then
+					colliding = .true.
+					r1 = b%geom%v(:,i) - b%pos
+					!r1 = b%pos - b%geom%v(:,i)
+					exit
+				end if
+			end do
+
 			!if (b%pos(3) < w%ground_z) then
 			!if (minval(b%geom%v(3,:)) < w%ground_z) then
-			if (minval(matmul(w%ground_nrm, &
-				b%geom%v - spread(w%ground_pos, 2, b%geom%nv))) <= 0) then
+			!if (minval(matmul(w%ground_nrm, &
+			!	b%geom%v - spread(w%ground_pos, 2, b%geom%nv))) <= 0) then
+			if (colliding) then
+
+				! Collide body (body 1) with ground (body 2).  The ground has
+				! infinite mass and inertia, so many terms become zero
+
+				! Velocities of each bodies' points *at point of contact* (not
+				! center of mass)
+				vp2 = 0
+				vp1 = b%vel + cross(b%ang_vel, r1)
+
+				! Relative velocity
+				vr = vp2 - vp1
+				!vr = vp1 - vp2
+
+				! Normal vector of collision plane.  I think this minus sign
+				! doesn't make a difference
+				nrm = -w%ground_nrm
+
+				! Mass and inertia *in world frame of reference*
+				m1 = b%mass
+				!i1 = b%inertia
+				i1 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
+				!i1 = matmul(matmul(transpose(b%rot), b%inertia), b%rot)
+
+				! Coefficient of restitution.  TODO: average for two bodies
+				e = w%matls(b%matl)%coef_rest
+
+				! Impulse magnitude
+				jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
+					(1.d0/m1 + dot_product(nrm, cross(invmul(i1, cross(r1, nrm)), r1)))
+
+
+
+
+
+				!jr = jr_mag * nrm
+
+				b%vel = v0 - jr_mag / m1 * nrm
+				!b%vel = b%vel - jr_mag / m1 * nrm
+				b%ang_vel = b%ang_vel - jr_mag * invmul(i1, cross(r1, nrm))
+
+
+
 
 				b%pos = p0
-				b%vel(3) = -w%matls(b%matl)%coef_rest * v0(3)
+				! TODO: reset b%rot to pre-contact orientation?
+
+				!b%pos = p0
+				!b%vel(3) = -w%matls(b%matl)%coef_rest * v0(3)
 				call update_pose(b)
 
 			end if
@@ -931,6 +991,56 @@ subroutine ribbit_run(w)
 	write(*,*) "ending ribbit_run()"
 
 end subroutine ribbit_run
+
+!===============================================================================
+
+function invmul(a, b) result(x)
+
+	! Sove the matrix equation:
+	!
+	!     A * x = b
+	!
+	! for x:
+	!
+	!     x = inv(A) * b
+
+	!double precision :: a(n, n), x(n), b(n)
+	double precision, intent(in) :: a(:, :), b(:)
+	double precision, allocatable :: x(:)
+
+	!********
+
+	double precision, allocatable :: a_(:,:)
+
+	!integer, parameter :: n = 2
+	integer :: io, n, nrhs, lda, ldb
+	integer, allocatable :: ipiv(:)
+
+	!print *, "a = ", a
+	!print *, "b = ", b
+
+	! In general, these sizes could have different values if b is a matrix or A
+	! is not square
+
+	n = size(a, 2)
+
+	nrhs = 1
+	lda = n
+	ldb = n
+
+	allocate(ipiv(n))
+
+	x = b
+	a_ = a
+	call dgesv(n, nrhs, a_, lda, ipiv, x, ldb, io)
+
+	! TODO: verify that i'm calling dgesv correctly
+
+	if (io /= 0) call panic("lapack error in dgesv()")
+
+	!print *, "x = ", x
+
+end function invmul
 
 !===============================================================================
 

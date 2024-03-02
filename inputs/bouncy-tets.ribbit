@@ -4,7 +4,7 @@
 		"grav_accel": [0, 0, -9.807],  # m/s^2
 		"t_start": 0,
 		"t_end"  : 20, # s
-		"dt": 0.01,
+		"dt": 0.002,
 		#"ground_pos": [0, 0, -0.5],
 		"ground_nrm": [0, 0.1, 0.9],
 		"bodies":
@@ -15,14 +15,14 @@
 				"vel": [0, 0, 0],
 				"ang": [0, 0, 0], # degrees
 				"ang_vel": [200, 200, 200],  # degrees/s
-			},
-			{
-				"geom": "inputs/tet.obj",
-				"pos": [2, 0, 1],
-				"vel": [0, 0, 0.8],
-				"ang": [0, 0, 90],
-				"ang_vel": [0, 0, -90],
-				"matl": 1
+			#},
+			#{
+			#	"geom": "inputs/tet.obj",
+			#	"pos": [2, 0, 1],
+			#	"vel": [0, 0, 0.8],
+			#	"ang": [0, 0, 90],
+			#	"ang_vel": [0, 0, -90],
+			#	"matl": 1
 			}
 		],
 		"matls":
