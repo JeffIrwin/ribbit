@@ -72,18 +72,16 @@ module ribbit
 	type body_t
 
 		type(geom_t) :: geom
-		!type(matl_t)  :: matl
 		integer :: matl  ! index of world%matls(:) array
 
 		double precision :: pos(ND)
 		double precision :: vel(ND)
 
-		!double precision :: ang(ND)
 		double precision :: rot(ND, ND)
 		double precision :: ang_vel(ND)
 
 		double precision :: vol, mass
-		double precision :: inertia(ND, ND)  ! TODO
+		double precision :: inertia(ND, ND)
 
 	end type body_t
 
@@ -96,7 +94,6 @@ module ribbit
 		type(body_t), allocatable :: bodies(:)
 		type(matl_t), allocatable :: matls (:)
 
-		!double precision :: ground_z
 		double precision :: ground_pos(ND)
 		double precision :: ground_nrm(ND)
 
@@ -286,7 +283,7 @@ subroutine get_inertia(b, w)
 		vol_tet = vol_tet / 6.d0
 
 		! TODO: get rid of v temp var.  Also move this outer loop *after*
-		! translating all verts by com.
+		! translating all verts by com and loop up to 3 instead of 4
 		v(:, 1:3) = b%geom%v(:, b%geom%t(:,i))
 		v(:,   4) = 0.d0
 
@@ -633,7 +630,6 @@ function read_world(filename, permissive) result(w)
 
 	! Set world defaults
 	w%grav_accel = 0.d0
-	!w%ground_z = 0.d0
 	w%ground_pos = 0.d0
 	w%ground_nrm = [0, 0, 1]
 	w%t_start = 0.d0
@@ -678,7 +674,7 @@ function read_world(filename, permissive) result(w)
 			w%bodies(ib)%vel = 0.d0
 			w%bodies(ib)%ang_vel = 0.d0
 			w%bodies(ib)%matl = 1
-			!w%bodies(ib)%geom
+			!w%bodies(ib)%geom  ! TODO: check has_geom for each body
 			ang = 0.d0
 
 			call json%get_child(p, ib, pc)
@@ -695,7 +691,6 @@ function read_world(filename, permissive) result(w)
 
 				select case (key)
 				case ("geom")
-					!call json%get(pgc, "@", w%geom_name)
 					call json%get(pgc, "@", geom_name)
 					w%bodies(ib)%geom = read_geom(geom_name)
 
@@ -782,8 +777,6 @@ function read_world(filename, permissive) result(w)
 		call ribbit_exit(EXIT_FAILURE)
 
 	end if
-
-	!call exit(0)
 
 end function read_world
 
@@ -900,31 +893,23 @@ subroutine ribbit_run(w)
 
 			! Update rotations by multiplying by a rotation matrix, not by
 			! adding vector3's!
-			b%rot = matmul(b%rot, get_rot(b%ang_vel * w%dt))
-			!b%ang = modulo(b%ang + b%ang_vel * w%dt, 2 * PI)
+			b%rot = matmul(get_rot(b%ang_vel * w%dt), b%rot)
 
 			! Rounding errors might accumulate after many time steps.
 			! Re-orthonormalize just in case
 			call gram_schmidt(b%rot)
 
 			call update_pose(b)
-			!print *, "rot = "
-			!print "(3es16.6)", b%rot
 
 			colliding = .false.
 			do i = 1, b%geom%nv
 				if (dot_product(w%ground_nrm, b%geom%v(:,i) - w%ground_pos) <= 0) then
 					colliding = .true.
 					r1 = b%geom%v(:,i) - b%pos
-					!r1 = b%pos - b%geom%v(:,i)
 					exit
 				end if
 			end do
 
-			!if (b%pos(3) < w%ground_z) then
-			!if (minval(b%geom%v(3,:)) < w%ground_z) then
-			!if (minval(matmul(w%ground_nrm, &
-			!	b%geom%v - spread(w%ground_pos, 2, b%geom%nv))) <= 0) then
 			if (colliding) then
 
 				! Collide body (body 1) with ground (body 2).  The ground has
@@ -937,7 +922,6 @@ subroutine ribbit_run(w)
 
 				! Relative velocity
 				vr = vp2 - vp1
-				!vr = vp1 - vp2
 
 				! Normal vector of collision plane.  I think this minus sign
 				! doesn't make a difference
@@ -945,29 +929,21 @@ subroutine ribbit_run(w)
 
 				! Mass and inertia *in world frame of reference*
 				m1 = b%mass
-				!i1 = b%inertia
 				i1 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
-				!i1 = matmul(matmul(transpose(b%rot), b%inertia), b%rot)
 
-				! Coefficient of restitution.  TODO: average for two bodies
+				! Coefficient of restitution.  TODO: average/min for two bodies
 				e = w%matls(b%matl)%coef_rest
 
 				! Impulse magnitude
+				!
+				! TODO: replace invmul() with 2 different phases for factoring
+				! and substituting
 				jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
 					(1.d0/m1 + dot_product(nrm, cross(invmul(i1, cross(r1, nrm)), r1)))
 
-
-
-
-
-				!jr = jr_mag * nrm
-
 				b%vel = v0 - jr_mag / m1 * nrm
-				!b%vel = b%vel - jr_mag / m1 * nrm
 				b%ang_vel = b%ang_vel - jr_mag * invmul(i1, cross(r1, nrm))
-
-
-
+				!print *, "b%ang_vel", b%ang_vel
 
 				b%pos = p0
 				! TODO: reset b%rot to pre-contact orientation?
@@ -996,7 +972,7 @@ end subroutine ribbit_run
 
 function invmul(a, b) result(x)
 
-	! Sove the matrix equation:
+	! Solve the matrix equation:
 	!
 	!     A * x = b
 	!
@@ -1004,7 +980,6 @@ function invmul(a, b) result(x)
 	!
 	!     x = inv(A) * b
 
-	!double precision :: a(n, n), x(n), b(n)
 	double precision, intent(in) :: a(:, :), b(:)
 	double precision, allocatable :: x(:)
 
@@ -1012,7 +987,6 @@ function invmul(a, b) result(x)
 
 	double precision, allocatable :: a_(:,:)
 
-	!integer, parameter :: n = 2
 	integer :: io, n, nrhs, lda, ldb
 	integer, allocatable :: ipiv(:)
 
@@ -1033,8 +1007,6 @@ function invmul(a, b) result(x)
 	x = b
 	a_ = a
 	call dgesv(n, nrhs, a_, lda, ipiv, x, ldb, io)
-
-	! TODO: verify that i'm calling dgesv correctly
 
 	if (io /= 0) call panic("lapack error in dgesv()")
 
@@ -1183,7 +1155,6 @@ subroutine write_step(w)
 
 	integer :: fid, io, i, ib
 
-	!real :: rot(ND, ND), rotx(ND, ND), roty(ND, ND), rotz(ND, ND), ax, ay, az
 	real, allocatable :: r(:,:)
 
 	! TODO: add arg for filename.  Encapsulate in world struct?
@@ -1207,49 +1178,8 @@ subroutine write_step(w)
 
 		write(fid, "(i0)") w%bodies(ib)%geom%nv
 
-		! Copy and convert original vertex positions to 4-byte real
+		! Copy and convert vertex positions to 4-byte real
 		r = w%bodies(ib)%geom%v
-
-		!! Rotation angles about each axis
-		!ax = w%bodies(ib)%ang(1)
-		!ay = w%bodies(ib)%ang(2)
-		!az = w%bodies(ib)%ang(3)
-
-		!! Cardinal rotation matrices
-
-		!rotx(:,1) = [1.0,      0.0,     0.0]
-		!rotx(:,2) = [0.0,  cos(ax), sin(ax)]
-		!rotx(:,3) = [0.0, -sin(ax), cos(ax)]
-
-		!roty(:,1) = [cos(ay), 0.0, -sin(ay)]
-		!roty(:,2) = [     0.0, 1.0,     0.0]
-		!roty(:,3) = [sin(ay), 0.0,  cos(ay)]
-
-		!rotz(:,1) = [ cos(az), sin(az), 0.0]
-		!rotz(:,2) = [-sin(az), cos(az), 0.0]
-		!rotz(:,3) = [     0.0,     0.0, 1.0]
-
-		!! First rotate about x, then about y, then about z
-		!rot = matmul(rotz, matmul(roty, rotx))
-		!!rot = matmul(rotx, matmul(roty, rotz))
-
-		!! Rotate first and then translate by com position
-		!r = matmul(rot, r)  ! TODO: lapack
-
-		!!print *, "rot "
-		!!print "(3es16.6)", rot
-		!!print *, "size(w%bodies(ib)%geom%v) = ", size(w%bodies(ib)%geom%v)
-		!!print *, "size(r) = ", size(r)
-
-		!! x, y, then z coords.  whitespace matters
-
-		!!write(fid, "(es16.6)") w%bodies(ib)%geom%v(1,:) + w%bodies(ib)%pos(1)
-		!!write(fid, "(es16.6)") w%bodies(ib)%geom%v(2,:) + w%bodies(ib)%pos(2)
-		!!write(fid, "(es16.6)") w%bodies(ib)%geom%v(3,:) + w%bodies(ib)%pos(3)
-
-		!write(fid, "(es16.6)") r(1,:) + w%bodies(ib)%pos(1)
-		!write(fid, "(es16.6)") r(2,:) + w%bodies(ib)%pos(2)
-		!write(fid, "(es16.6)") r(3,:) + w%bodies(ib)%pos(3)
 
 		write(fid, "(es16.6)") r(1,:)
 		write(fid, "(es16.6)") r(2,:)
@@ -1277,6 +1207,7 @@ end subroutine panic
 
 subroutine ribbit_exit(exit_code)
 	integer, intent(in) :: exit_code
+	if (exit_code == EXIT_SUCCESS) write(*,*) fg_bright_green//"finished ribbit"//color_reset
 	call exit(exit_code)
 end subroutine ribbit_exit
 
