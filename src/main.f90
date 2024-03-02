@@ -233,48 +233,35 @@ end function cross
 
 !===============================================================================
 
-subroutine get_inertia(bo, w)
+subroutine get_inertia(b, w)
 
 	! Get mass, center of mass, volume, and inertia tensor
 
-	type(body_t), intent(inout) :: bo
+	type(body_t), intent(inout) :: b
 	type(world_t), intent(in)   :: w
 
 	!********
 
 	double precision :: vol_tet, com_tet(ND), vol, com(ND)
 	double precision :: v(ND, 4), x(4), y(4), z(4)
-	double precision :: a, b, c, ap, bp, cp
+	double precision :: ixx, iyy, izz, ixy, iyz, izx
 
 	integer :: i, j, k
 
-	!v(:,1) = [ 8.33220, -11.86875,  0.93355]
-	!v(:,2) = [ 0.75523,   5.00000, 16.37072]
-	!v(:,3) = [52.61236,   5.00000, -5.38580]
-	!v(:,4) = [ 2.00000,   5.00000,  3.00000]
-
-	!com = sum(v, 2) / size(v, 2)
-	!print *, "com = ", com
-
-	!vol = dot_product(cross( &
-	!	v(:,2) - v(:,1) ,    &
-	!	v(:,3) - v(:,1)),    &
-	!	v(:,4) - v(:,1)) / 6.d0
-
 	vol = 0.d0
 	com = 0.d0
-	do i = 1, bo%geom%nt
+	do i = 1, b%geom%nt
 
 		! 6 * volume of a tetrahedron formed by triangle i and origin
 		vol_tet = dot_product(cross(    &
-			bo%geom%v(:, bo%geom%t(1,i)), &
-			bo%geom%v(:, bo%geom%t(2,i))), &
-			bo%geom%v(:, bo%geom%t(3,i)))
+			b%geom%v(:, b%geom%t(1,i)), &
+			b%geom%v(:, b%geom%t(2,i))), &
+			b%geom%v(:, b%geom%t(3,i)))
 
 		vol = vol + vol_tet
 
 		! Center of mass of this tetrahedron
-		com_tet = 0.25d0 * sum(bo%geom%v(:, bo%geom%t(:,i)), 2)
+		com_tet = 0.25d0 * sum(b%geom%v(:, b%geom%t(:,i)), 2)
 
 		! Overall center of mass is weighted average
 		com = com + vol_tet * com_tet
@@ -283,32 +270,31 @@ subroutine get_inertia(bo, w)
 	com = com / vol
 	vol = vol / 6.d0
 
-	bo%vol = vol
-	!bo%com = com
+	b%vol = vol
 
 	! Now that the overall center of mass is known, do another loop to get the
 	! inertia tensor (relative to overall com)
-	bo%inertia = 0.d0
-	do i = 1, bo%geom%nt
+	b%inertia = 0.d0
+	do i = 1, b%geom%nt
 
 		! Repeat volume calculation.  Could be saved in array.  Time/space
 		! tradeoff
 		vol_tet = dot_product(cross(    &
-			bo%geom%v(:, bo%geom%t(1,i)), &
-			bo%geom%v(:, bo%geom%t(2,i))), &
-			bo%geom%v(:, bo%geom%t(3,i)))
+			b%geom%v(:, b%geom%t(1,i)), &
+			b%geom%v(:, b%geom%t(2,i))), &
+			b%geom%v(:, b%geom%t(3,i)))
 		vol_tet = vol_tet / 6.d0
 
 		!vol = vol + vol_tet
 
 		!! Center of mass of this tetrahedron
-		!com_tet = 0.25d0 * sum(bo%geom%v(:, bo%geom%t(:,i)), 2)
+		!com_tet = 0.25d0 * sum(b%geom%v(:, b%geom%t(:,i)), 2)
 
 		!! Overall center of mass is weighted average
 		!com = com + vol_tet * com_tet
 
 		! TODO: get rid of x, y, and z vars.  Also maybe v?
-		v(:, 1:3) = bo%geom%v(:, bo%geom%t(:,i))
+		v(:, 1:3) = b%geom%v(:, b%geom%t(:,i))
 		v(:,   4) = 0.d0
 
 		!x = v(1,:) - com_tet(1)
@@ -318,76 +304,83 @@ subroutine get_inertia(bo, w)
 		y = v(2,:) - com(2)
 		z = v(3,:) - com(3)
 
-		a = 0.d0
-		b = 0.d0
-		c = 0.d0
+		! Ref:  https://thescipub.com/pdf/jmssp.2005.8.11.pdf
+		ixx = 0.d0
+		iyy = 0.d0
+		izz = 0.d0
 		do k = 1, 4
 		do j = 1, k
-			a = a + y(k) * y(j) + z(k) * z(j)
-			b = b + z(k) * z(j) + x(k) * x(j)
-			c = c + x(k) * x(j) + y(k) * y(j)
+			ixx = ixx + y(k) * y(j) + z(k) * z(j)
+			iyy = iyy + z(k) * z(j) + x(k) * x(j)
+			izz = izz + x(k) * x(j) + y(k) * y(j)
 		end do
 		end do
-		a = vol_tet * a / 10
-		b = vol_tet * b / 10
-		c = vol_tet * c / 10
+		ixx = vol_tet * ixx / 10
+		iyy = vol_tet * iyy / 10
+		izz = vol_tet * izz / 10
 
-		ap = 0.d0
-		bp = 0.d0
-		cp = 0.d0
+		iyz = 0.d0
+		izx = 0.d0
+		ixy = 0.d0
 		do k = 1, 4
-			ap = ap + y(k) * z(k)
-			bp = bp + z(k) * x(k)
-			cp = cp + x(k) * y(k)
+			iyz = iyz + y(k) * z(k)
+			izx = izx + z(k) * x(k)
+			ixy = ixy + x(k) * y(k)
 			do j = 1, 4
-				ap = ap + y(k) * z(j)
-				bp = bp + z(k) * x(j)
-				cp = cp + x(k) * y(j)
+				iyz = iyz + y(k) * z(j)
+				izx = izx + z(k) * x(j)
+				ixy = ixy + x(k) * y(j)
 			end do
 		end do
-		ap = vol_tet * ap / 20
-		bp = vol_tet * bp / 20
-		cp = vol_tet * cp / 20
+		iyz = vol_tet * iyz / 20
+		izx = vol_tet * izx / 20
+		ixy = vol_tet * ixy / 20
 
-		print *, "a = ", a
-		print *, "b = ", b
-		print *, "c = ", c
+		print *, "ixx = ", ixx
+		print *, "iyy = ", iyy
+		print *, "izz = ", izz
 
-		print *, "ap = ", ap
-		print *, "bp = ", bp
-		print *, "cp = ", cp
+		print *, "iyz = ", iyz
+		print *, "izx = ", izx
+		print *, "ixy = ", ixy
 
 		! Components are arranged in inertia tensor like this:
 		!
-		! [  a , -b', -c' ]
-		! [ -b',  b , -a' ]
-		! [ -c', -a',  c  ]
+		! [  ixx, -ixy, -izx ]
+		! [ -ixy,  iyy, -iyz ]
+		! [ -izx, -iyz,  izz ]
 
-		bo%inertia(1,1) = bo%inertia(1,1) + a
-		bo%inertia(2,2) = bo%inertia(2,2) + b
-		bo%inertia(3,3) = bo%inertia(3,3) + c
-		! TODO: ap, bp, cp off -diagonal terms
+		b%inertia(1,1) = b%inertia(1,1) + ixx
+		b%inertia(2,2) = b%inertia(2,2) + iyy
+		b%inertia(3,3) = b%inertia(3,3) + izz
+
+		b%inertia(1,2) = b%inertia(1,2) - ixy
+		b%inertia(2,3) = b%inertia(2,3) - iyz
+		b%inertia(3,1) = b%inertia(3,1) - izx
 
 	end do
+	b%inertia(2,1) = b%inertia(1,2)
+	b%inertia(3,2) = b%inertia(2,3)
+	b%inertia(1,3) = b%inertia(3,1)
 
-	bo%inertia = bo%inertia * w%matls(bo%matl)%dens
-	print *, "bo%inertia = "
-	print "(3es16.6)", bo%inertia
+	b%inertia = b%inertia * w%matls(b%matl)%dens
+	print *, "b%inertia = "
+	print "(3es16.6)", b%inertia
 
 	! Translate all vertices so that the center of mass is at the origin
-	do i = 1, bo%geom%nv
-		bo%geom%v(:,i) = bo%geom%v(:,i) - com
+	do i = 1, b%geom%nv
+		b%geom%v(:,i) = b%geom%v(:,i) - com
 	end do
 
 	! Backup original vertex locations so that rounding errors do not warp the
 	! shape of the body
-	bo%geom%v0 = bo%geom%v
+	b%geom%v0 = b%geom%v
 
-	bo%mass = w%matls(bo%matl)%dens * bo%vol
+	b%mass = w%matls(b%matl)%dens * b%vol
 
-	print *, "vol  = ", bo%vol
+	print *, "vol  = ", b%vol
 	print *, "com  = ", com
-	print *, "mass = ", bo%mass
+	print *, "mass = ", b%mass
 
 end subroutine get_inertia
 
@@ -1135,98 +1128,6 @@ end subroutine ribbit_exit
 
 !===============================================================================
 
-subroutine test_inertia()
-	! TODO: testing only
-	!
-	! Ref:  https://thescipub.com/pdf/jmssp.2005.8.11.pdf
-
-	double precision :: v(ND, 4), x(4), y(4), z(4)
-
-	double precision :: com(ND), a, b, c, ap, bp, cp, vol
-
-	integer :: i, j
-
-	v(:,1) = [ 8.33220, -11.86875,  0.93355]
-	v(:,2) = [ 0.75523,   5.00000, 16.37072]
-	v(:,3) = [52.61236,   5.00000, -5.38580]
-	v(:,4) = [ 2.00000,   5.00000,  3.00000]
-
-	! Expected centroid: [15.92492, 0.78281, 3.72962]
-	!
-	! Expected inertia components:
-	!
-	!     a/µ = 43520.33257 m**5
-	!     b/µ = 194711.28938 m**5
-	!     c/µ = 191168.76173 m**5
-	!     a’/µ = 4417.66150 m**5
-	!     b’/µ = -46343.16662 m**5
-	!     c’/µ = 11996.20119 m**5
-	!
-	! where µ is density.
-	!
-	! Components are arranged in inertia tensor like this:
-	!
-	! [  a , -b', -c' ]
-	! [ -b',  b , -a' ]
-	! [ -c', -a',  c  ]
-
-	com = sum(v, 2) / size(v, 2)
-	print *, "com = ", com
-
-	vol = dot_product(cross( &
-		v(:,2) - v(:,1) ,    &
-		v(:,3) - v(:,1)),    &
-		v(:,4) - v(:,1)) / 6.d0
-
-	x = v(1,:) - com(1)
-	y = v(2,:) - com(2)
-	z = v(3,:) - com(3)
-
-	a = 0.d0
-	b = 0.d0
-	c = 0.d0
-	do i = 1, 4
-	do j = 1, i
-		a = a + y(i) * y(j) + z(i) * z(j)
-		b = b + z(i) * z(j) + x(i) * x(j)
-		c = c + x(i) * x(j) + y(i) * y(j)
-	end do
-	end do
-	a = vol * a / 10
-	b = vol * b / 10
-	c = vol * c / 10
-
-	ap = 0.d0
-	bp = 0.d0
-	cp = 0.d0
-	do i = 1, 4
-		ap = ap + y(i) * z(i)
-		bp = bp + z(i) * x(i)
-		cp = cp + x(i) * y(i)
-		do j = 1, 4
-			ap = ap + y(i) * z(j)
-			bp = bp + z(i) * x(j)
-			cp = cp + x(i) * y(j)
-		end do
-	end do
-	ap = vol * ap / 20
-	bp = vol * bp / 20
-	cp = vol * cp / 20
-
-	print *, "a = ", a
-	print *, "b = ", b
-	print *, "c = ", c
-
-	print *, "ap = ", ap
-	print *, "bp = ", bp
-	print *, "cp = ", cp
-
-	call ribbit_exit(EXIT_SUCCESS)
-
-end subroutine test_inertia
-
-!===============================================================================
-
 end module ribbit
 
 !===============================================================================
@@ -1237,8 +1138,6 @@ program main
 
 	type(args_t)  :: args
 	type(world_t) :: world
-
-	!call test_inertia()
 
 	args  = read_args()
 	world = read_world(args%ribbit_file, args%permissive)
