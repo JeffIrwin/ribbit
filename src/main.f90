@@ -1190,7 +1190,7 @@ subroutine write_step(w)
 	real, allocatable :: r(:,:)
 
 	! TODO: add json (or cmd) binary toggle option
-	logical, parameter :: binary = .false.
+	logical, parameter :: binary = .true.
 
 	!print *, "starting write_step()"
 
