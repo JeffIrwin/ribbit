@@ -1105,6 +1105,7 @@ end subroutine update_pose
 !===============================================================================
 
 subroutine write_case(w)
+	! Ref: https://dav.lbl.gov/archive/NERSC/Software/ensight/doc/Manuals/UserManual.pdf
 
 	type(world_t), intent(in) :: w
 
@@ -1148,6 +1149,7 @@ end subroutine write_case
 !===============================================================================
 
 subroutine write_step(w)
+	! Ref: https://dav.lbl.gov/archive/NERSC/Software/ensight/doc/Manuals/UserManual.pdf
 
 	type(world_t), intent(in) :: w
 
