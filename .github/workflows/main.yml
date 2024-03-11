@@ -25,6 +25,14 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
+    - uses: fortran-lang/setup-fortran@v1
+      id: setup-fortran
+      with:
+        compiler: intel
+        version: 2023.2
+        #compiler: ${{ matrix.toolchain.compiler }}
+        #version: ${{ matrix.toolchain.version }}
+
     #- if: matrix.os == 'ubuntu-latest'
     #  name: Set ubuntu PATH
     #  run: |
@@ -33,11 +41,11 @@ jobs:
     - if: matrix.os == 'ubuntu-latest'
       name: Run fpm default
       env:
-        FPM_FC: gfortran-12
+        FPM_FC: ${{ env.FC }}
       run: |
         mkdir scratch
-        fpm run --profile debug   -- inputs/bouncy-tets.ribbit
-        fpm run --profile release -- inputs/bouncy-tets.ribbit
+        fpm run --flag "-fpp -Qmkl -heap-arrays0" --profile debug   -- inputs/cubes.ribbit
+        fpm run --flag "-fpp -Qmkl -heap-arrays0" --profile release -- inputs/cubes.ribbit
 
     #- if: matrix.os == 'ubuntu-latest'
     #  run: |
