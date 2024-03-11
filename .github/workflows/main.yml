@@ -44,8 +44,8 @@ jobs:
         FPM_FC: ${{ env.FC }}
       run: |
         mkdir scratch
-        fpm run --flag "-fpp -Qmkl -heap-arrays0" --profile debug   -- inputs/cubes.ribbit
-        fpm run --flag "-fpp -Qmkl -heap-arrays0" --profile release -- inputs/cubes.ribbit
+        fpm run --flag "-fpp -qmkl -heap-arrays0" --profile debug   -- inputs/cubes.ribbit
+        fpm run --flag "-fpp -qmkl -heap-arrays0" --profile release -- inputs/cubes.ribbit
 
     #- if: matrix.os == 'ubuntu-latest'
     #  run: |
