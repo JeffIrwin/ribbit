@@ -828,7 +828,7 @@ function get_array(json, p, n) result(array)
 	!********
 
 	character(len = :), allocatable :: path
-	integer :: i, io, count_
+	integer :: i, count_
 	type(json_value), pointer :: pc
 
 	count_ = json%count(p)
@@ -854,18 +854,10 @@ subroutine ribbit_run(w)
 
 	!********
 
-	character(len = :), allocatable :: csv_file
+	character(len = : ), allocatable :: csv_file
 
-	double precision :: p0(ND), v0(ND), rot0(ND, ND)
-	double precision :: vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, &
-		i1(ND, ND), jr(ND), jr_mag, e
-
-	integer :: ib, i, io
+	integer :: ib, io
 	integer :: fid
-
-	logical :: found, colliding
-
-	type(body_t)  :: b
 
 	write(*,*) "starting ribbit_run()"
 
@@ -885,81 +877,7 @@ subroutine ribbit_run(w)
 		write(fid, *)
 
 		do ib = 1, size(w%bodies)
-			!print *, "copying body"
-			b = w%bodies(ib)
-
-			v0 = b%vel
-			b%vel = v0 + w%grav_accel * w%dt
-
-			p0   = b%pos
-			rot0 = b%rot
-
-			b%pos = p0 + 0.5 * (v0 + b%vel) * w%dt
-
-			! Update rotations by multiplying by a rotation matrix, not by
-			! adding vector3's!
-			b%rot = matmul(get_rot(b%ang_vel * w%dt), b%rot)
-
-			! Rounding errors might accumulate after many time steps.
-			! Re-orthonormalize just in case
-			call gram_schmidt(b%rot)
-
-			call update_pose(b)
-
-			colliding = .false.
-			do i = 1, b%geom%nv
-				if (dot_product(w%ground_nrm, b%geom%v(:,i) - w%ground_pos) <= 0) then
-					colliding = .true.
-					r1 = b%geom%v(:,i) - b%pos
-					exit
-				end if
-			end do
-
-			if (colliding) then
-
-				! Collide body (body 1) with ground (body 2).  The ground has
-				! infinite mass and inertia, so many terms become zero
-
-				! Velocities of each bodies' points *at point of contact* (not
-				! center of mass)
-				vp2 = 0
-				vp1 = b%vel + cross(b%ang_vel, r1)
-
-				! Relative velocity
-				vr = vp2 - vp1
-
-				! Normal vector of collision plane.  I think this minus sign
-				! doesn't make a difference
-				nrm = -w%ground_nrm
-
-				! Mass and inertia *in world frame of reference*
-				m1 = b%mass
-				i1 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
-
-				! Coefficient of restitution.  TODO: average/min for two bodies
-				e = w%matls(b%matl)%coef_rest
-
-				! Impulse magnitude
-				!
-				! TODO: replace invmul() with 2 different phases for factoring
-				! and substituting
-				jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
-					(1.d0/m1 + dot_product(nrm, cross(invmul(i1, cross(r1, nrm)), r1)))
-
-				b%vel = v0 - jr_mag / m1 * nrm
-				b%ang_vel = b%ang_vel - jr_mag * invmul(i1, cross(r1, nrm))
-				!print *, "b%ang_vel", b%ang_vel
-
-				b%pos = p0
-				b%rot = rot0
-
-				!b%pos = p0
-				!b%vel(3) = -w%matls(b%matl)%coef_rest * v0(3)
-				call update_pose(b)
-
-			end if
-
-			w%bodies(ib) = b
+			call update_body(w, w%bodies(ib), ib)
 		end do
 
 		call write_step(w)
@@ -972,6 +890,97 @@ subroutine ribbit_run(w)
 	write(*,*) "ending ribbit_run()"
 
 end subroutine ribbit_run
+
+!===============================================================================
+
+subroutine update_body(w, b, ib)
+
+	type(world_t), intent(in) :: w
+	type(body_t), intent(inout) :: b
+	integer, intent(in) :: ib  ! don't check for collisions with self
+
+	!********
+
+	double precision :: p0(ND), v0(ND), rot0(ND, ND)
+	double precision :: vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, &
+		i1(ND, ND), jr(ND), jr_mag, e
+
+	integer :: i
+
+	logical :: colliding
+
+	v0 = b%vel
+	b%vel = v0 + w%grav_accel * w%dt
+
+	p0   = b%pos
+	rot0 = b%rot
+
+	b%pos = p0 + 0.5 * (v0 + b%vel) * w%dt
+
+	! Update rotations by multiplying by a rotation matrix, not by
+	! adding vector3's!
+	b%rot = matmul(get_rot(b%ang_vel * w%dt), b%rot)
+
+	! Rounding errors might accumulate after many time steps.
+	! Re-orthonormalize just in case
+	call gram_schmidt(b%rot)
+
+	call update_pose(b)
+
+	colliding = .false.
+	do i = 1, b%geom%nv
+		if (dot_product(w%ground_nrm, b%geom%v(:,i) - w%ground_pos) <= 0) then
+			colliding = .true.
+			r1 = b%geom%v(:,i) - b%pos
+			exit
+		end if
+	end do
+
+	if (colliding) then
+
+		! Collide body (body 1) with ground (body 2).  The ground has
+		! infinite mass and inertia, so many terms become zero
+
+		! Velocities of each bodies' points *at point of contact* (not
+		! center of mass)
+		vp2 = 0
+		vp1 = b%vel + cross(b%ang_vel, r1)
+
+		! Relative velocity
+		vr = vp2 - vp1
+
+		! Normal vector of collision plane.  I think this minus sign
+		! doesn't make a difference
+		nrm = -w%ground_nrm
+
+		! Mass and inertia *in world frame of reference*
+		m1 = b%mass
+		i1 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
+
+		! Coefficient of restitution.  TODO: average/min for two bodies
+		e = w%matls(b%matl)%coef_rest
+
+		! Impulse magnitude
+		!
+		! TODO: replace invmul() with 2 different phases for factoring
+		! and substituting
+		jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
+			(1.d0/m1 + dot_product(nrm, cross(invmul(i1, cross(r1, nrm)), r1)))
+
+		b%vel = v0 - jr_mag / m1 * nrm
+		b%ang_vel = b%ang_vel - jr_mag * invmul(i1, cross(r1, nrm))
+		!print *, "b%ang_vel", b%ang_vel
+
+		b%pos = p0
+		b%rot = rot0
+
+		!b%pos = p0
+		!b%vel(3) = -w%matls(b%matl)%coef_rest * v0(3)
+		call update_pose(b)
+
+	end if
+
+end subroutine update_body
 
 !===============================================================================
 
@@ -1124,7 +1133,7 @@ subroutine write_case(w)
 
 	character(len = :), allocatable :: case_file
 
-	integer :: fid, io, i, ib
+	integer :: fid, io, i
 
 	! TODO: add arg for filename.  Encapsulate in world struct?
 	!
