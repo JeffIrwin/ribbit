@@ -43,9 +43,7 @@ jobs:
       env:
         FPM_FC: ${{ env.FC }}
       run: |
-        which ifx
-        sudo apt install intel-oneapi-mkl-devel  # TODO: openmp
-        which ifx
+        sudo apt install intel-oneapi-mkl-devel intel-oneapi-openmp
         source /opt/intel/oneapi/setvars.sh --force
         mkdir scratch
         fpm run --flag "-fpp -qmkl -heap-arrays0" --profile debug   -- inputs/cubes.ribbit
