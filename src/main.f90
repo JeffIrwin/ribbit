@@ -905,7 +905,7 @@ subroutine update_body(w, b, ib)
 	double precision :: vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, &
 		i1(ND, ND), jr(ND), jr_mag, e
 
-	integer :: i
+	integer :: i, ncolliding
 
 	logical :: colliding
 
@@ -927,14 +927,20 @@ subroutine update_body(w, b, ib)
 
 	call update_pose(b)
 
+	! In case of collision along an entire face or edge, get the centroid of
+	! that face/edge instead of just one vertex, by taking the average of all
+	! colliding vertices
 	colliding = .false.
+	ncolliding = 0
+	r1 = 0.d0
 	do i = 1, b%geom%nv
 		if (dot_product(w%ground_nrm, b%geom%v(:,i) - w%ground_pos) <= 0) then
 			colliding = .true.
-			r1 = b%geom%v(:,i) - b%pos
-			exit
+			ncolliding = ncolliding + 1
+			r1 = r1 + b%geom%v(:,i) - b%pos
 		end if
 	end do
+	r1 = r1 / ncolliding
 
 	if (colliding) then
 
