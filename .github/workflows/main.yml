@@ -25,11 +25,6 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - if: matrix.os == 'ubuntu-latest'
-      name: Install mkl
-      run: |
-        sudo apt install intel-oneapi-mkl-devel  # TODO: openmp
-
     - uses: fortran-lang/setup-fortran@v1
       id: setup-fortran
       with:
@@ -48,6 +43,10 @@ jobs:
       env:
         FPM_FC: ${{ env.FC }}
       run: |
+        which ifx
+        sudo apt install intel-oneapi-mkl-devel  # TODO: openmp
+        which ifx
+        source /opt/intel/oneapi/setvars.sh
         mkdir scratch
         fpm run --flag "-fpp -qmkl -heap-arrays0" --profile debug   -- inputs/cubes.ribbit
         fpm run --flag "-fpp -qmkl -heap-arrays0" --profile release -- inputs/cubes.ribbit
