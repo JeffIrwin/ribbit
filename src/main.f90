@@ -65,6 +65,7 @@ module ribbit
 
 	type matl_t
 		double precision :: coef_rest, dens
+		double precision :: friction_stat, friction_dyn
 	end type matl_t
 
 	!********
@@ -739,6 +740,8 @@ function read_world(filename, permissive) result(w)
 			! Set defaults for each material
 			w%matls(im)%coef_rest = 0.9d0
 			w%matls(im)%dens      = 1000.d0
+			w%matls(im)%friction_stat = 0.6d0  ! TODO: good defaults? friction gets wonky
+			w%matls(im)%friction_dyn  = 0.4d0
 
 			call json%get_child(p, im, pc)
 
@@ -753,6 +756,12 @@ function read_world(filename, permissive) result(w)
 				select case (key)
 				case ("coef_rest")
 					call json%get(pgc, "@", w%matls(im)%coef_rest)
+
+				case ("friction_stat")
+					call json%get(pgc, "@", w%matls(im)%friction_stat)
+
+				case ("friction_dyn")
+					call json%get(pgc, "@", w%matls(im)%friction_dyn)
 
 				case ("dens")
 					call json%get(pgc, "@", w%matls(im)%dens)
@@ -901,9 +910,12 @@ subroutine update_body(w, b, ib)
 
 	!********
 
-	double precision :: p0(ND), v0(ND), rot0(ND, ND), i1_r1_nrm(ND)
-	double precision :: vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, &
-		i1(ND, ND), jr(ND), jr_mag, e, i1_lu(ND, ND)
+	double precision, parameter :: tol = 0.001
+
+	double precision :: p0(ND), v0(ND), rot0(ND, ND), i1_r1_nrm(ND), &
+		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
+		jr(ND), jr_mag, e, i1_lu(ND, ND), tng(ND), fe(ND), js, jd_mag, &
+		jf(ND), jf_mag, i1_r1_tng(ND)
 
 	integer :: i, ncolliding
 	integer, allocatable :: ipiv(:)
@@ -969,20 +981,58 @@ subroutine update_body(w, b, ib)
 
 		i1_r1_nrm = invmul(i1, cross(r1, nrm))
 
-		! Impulse magnitude
+		! Normal impulse magnitude
 		jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
 			(1.d0/m1 + dot_product(nrm, cross(i1_r1_nrm, r1)))
+		!print *, "jr_mag = ", jr_mag
 
-		b%vel = v0 - jr_mag / m1 * nrm
-		b%ang_vel = b%ang_vel - jr_mag * i1_r1_nrm
+		! Sum of external forces acting on body
+		fe = m1 * w%grav_accel
+		!print *, "fe = ", fe
+
+		! Tangent vector
+		if (abs(dot_product(vr, nrm)) > tol) then
+			tng = vr - dot_product(vr, nrm) * nrm
+			call normalize(tng)
+		else if (abs(dot_product(fe, nrm)) > tol) then
+			tng = fe - dot_product(fe, nrm) * nrm
+			call normalize(tng)
+		else
+			tng = 0
+		end if
+		!tng = -tng
+		!print *, "tng = ", tng
+
+		js = w%matls(b%matl)%friction_stat * jr_mag
+
+		! Get the friction (tangential) impulse vector `jf`
+		if (m1 * dot_product(vr, tng) <= js) then
+			!jf = -m1 * dot_product(vr, tng) * tng
+			jf_mag = -m1 * dot_product(vr, tng)
+		else
+			jd_mag = w%matls(b%matl)%friction_dyn * jr_mag
+			!jf = -jd_mag * tng
+			jf_mag = -jd_mag
+		end if
+		!print *, "jf_mag = ", jf_mag
+
+		!b%vel = v0 - jr_mag / m1 * nrm - jf / m1
+		b%vel = v0 - jr_mag / m1 * nrm - jf_mag / m1 * tng
+
+		! TODO: this is the same matrix inverted, but multiplied by a different
+		! RHS vector.  Go back to two-phase factor and solve
+		i1_r1_tng = invmul(i1, cross(r1, tng))
+
+		b%ang_vel = b%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
+
 		!print *, "b%ang_vel", b%ang_vel
 
 		b%pos = p0
 		b%rot = rot0
 
-		!b%pos = p0
-		!b%vel(3) = -w%matls(b%matl)%coef_rest * v0(3)
 		call update_pose(b)
+
+		!print *, ""
 
 	end if
 
@@ -1133,6 +1183,19 @@ subroutine gram_schmidt(a)
 	a(:,3) = a(:,3) - project(a(:,3), a(:,1)) - project(a(:,3), a(:,2))
 
 end subroutine gram_schmidt
+
+!===============================================================================
+
+subroutine normalize(v)
+	double precision, intent(inout) :: v(:)
+	double precision :: norm_
+	norm_ = norm2(v)
+	if (norm_ > 1.d-8) then
+		v = v / norm_
+	else
+		v = 0
+	endif
+end subroutine normalize
 
 !===============================================================================
 

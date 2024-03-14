@@ -3,7 +3,7 @@
 	{
 		"grav_accel": [0, 0, -9.807],  # m/s^2
 		"t_start": 0,
-		"t_end"  : 20, # s
+		"t_end"  : 60, # s
 		"dt": 0.01,
 		#"ground_nrm": [0, 0.1, 0.9],
 		"bodies":
@@ -11,7 +11,6 @@
 			{
 				"geom": "inputs/cube.obj",
 				"pos": [0, 0, 3],
-				#"vel": [0, 0, 0.8],
 				"ang": [45, 0, 0],
 				"ang_vel": [0, 0, 0],
 				"vel": [0, -0.5, 0],
@@ -22,7 +21,9 @@
 		[
 			{
 				"coef_rest": 0.74,
-				"dens": 2500.0 # kg/m^3
+				"dens": 2500.0, # kg/m^3
+				"friction_stat": 0.15,
+				"friction_dyn" : 0.1
 			}
 		]
 	}
