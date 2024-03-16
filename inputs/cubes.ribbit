@@ -3,22 +3,22 @@
 	{
 		"grav_accel": [0, 0, -9.807],  # m/s^2
 		"t_start": 0,
-		"t_end"  : 7.0, # s
+		"t_end"  : 15.0, # s
 		"dt": 0.006667,
-		#"ground_nrm": [0, 0.1, 0.9],
+		"ground_nrm": [0.02, 0.04, 0.9],
 		"bodies":
 		[
 			{
 				"geom": "inputs/cube.obj",
 				"pos": [0, 0, 3],
 				#"vel": [2.5, 0, 0],
-				"ang": [40, 45, 0],
+				"ang": [0, 0, 0],
 				"ang_vel": [0, 0, 0],
 				"matl": 1
 			},
 			{
 				"geom": "inputs/cube.obj",
-				"pos": [2.5, 0, 3],
+				"pos": [3.5, 0, 3],
 				#"vel": [0, 0, 0.8],
 				"ang": [0, 0, 0],
 				"ang_vel": [55, 35, 0],

@@ -664,6 +664,7 @@ function read_world(filename, permissive) result(w)
 		w%ground_pos = get_array(json, p, ND)
 	case ("ground_nrm")
 		w%ground_nrm = get_array(json, p, ND)
+		call normalize_s(w%ground_nrm)
 
 	case ("bodies")
 		count_ = json%count(p)
