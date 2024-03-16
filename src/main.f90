@@ -740,8 +740,8 @@ function read_world(filename, permissive) result(w)
 			! Set defaults for each material
 			w%matls(im)%coef_rest = 0.9d0
 			w%matls(im)%dens      = 1000.d0
-			w%matls(im)%friction_stat = 0.6d0  ! TODO: good defaults? friction gets wonky
-			w%matls(im)%friction_dyn  = 0.4d0
+			w%matls(im)%friction_stat = 0.15d0
+			w%matls(im)%friction_dyn  = 0.1d0
 
 			call json%get_child(p, im, pc)
 
@@ -915,7 +915,7 @@ subroutine update_body(w, b, ib)
 	double precision :: p0(ND), v0(ND), rot0(ND, ND), i1_r1_nrm(ND), &
 		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
 		jr(ND), jr_mag, e, i1_lu(ND, ND), tng(ND), fe(ND), js, jd_mag, &
-		jf(ND), jf_mag, i1_r1_tng(ND)
+		jf(ND), jf_mag, i1_r1_tng(ND), jf_max
 
 	integer :: i, ncolliding
 	integer, allocatable :: ipiv(:)
@@ -964,6 +964,7 @@ subroutine update_body(w, b, ib)
 		! center of mass)
 		vp2 = 0
 		vp1 = b%vel + cross(b%ang_vel, r1)
+		!vp1 = v0 + cross(b%ang_vel, r1)
 
 		! Relative velocity
 		vr = vp2 - vp1
@@ -981,7 +982,7 @@ subroutine update_body(w, b, ib)
 
 		i1_r1_nrm = invmul(i1, cross(r1, nrm))
 
-		! Normal impulse magnitude
+		! Normal impulse magnitude.  Ref: https://en.wikipedia.org/wiki/Collision_response
 		jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
 			(1.d0/m1 + dot_product(nrm, cross(i1_r1_nrm, r1)))
 		!print *, "jr_mag = ", jr_mag
@@ -991,37 +992,48 @@ subroutine update_body(w, b, ib)
 		!print *, "fe = ", fe
 
 		! Tangent vector
-		if (abs(dot_product(vr, nrm)) > tol) then
+		if (abs(dot_product(normalize(vr), nrm)) > tol) then
 			tng = vr - dot_product(vr, nrm) * nrm
-			call normalize(tng)
-		else if (abs(dot_product(fe, nrm)) > tol) then
+			call normalize_s(tng)
+		else if (abs(dot_product(normalize(fe), nrm)) > tol) then
 			tng = fe - dot_product(fe, nrm) * nrm
-			call normalize(tng)
+			call normalize_s(tng)
 		else
 			tng = 0
 		end if
 		!tng = -tng
 		!print *, "tng = ", tng
 
-		js = w%matls(b%matl)%friction_stat * jr_mag
-
-		! Get the friction (tangential) impulse vector `jf`
-		if (m1 * dot_product(vr, tng) <= js) then
-			!jf = -m1 * dot_product(vr, tng) * tng
-			jf_mag = -m1 * dot_product(vr, tng)
-		else
-			jd_mag = w%matls(b%matl)%friction_dyn * jr_mag
-			!jf = -jd_mag * tng
-			jf_mag = -jd_mag
-		end if
-		!print *, "jf_mag = ", jf_mag
-
-		!b%vel = v0 - jr_mag / m1 * nrm - jf / m1
-		b%vel = v0 - jr_mag / m1 * nrm - jf_mag / m1 * tng
+		!! Get the friction (tangential) impulse vector `jf`.  Ref: wiki ibid
+		!js = w%matls(b%matl)%friction_stat * abs(jr_mag)
+		!if (m1 * dot_product(vr, tng) <= js) then
+		!	!jf = -m1 * dot_product(vr, tng) * tng
+		!	jf_mag = -m1 * dot_product(vr, tng)
+		!else
+		!	jd_mag = w%matls(b%matl)%friction_dyn * abs(jr_mag)
+		!	!jf = -jd_mag * tng
+		!	jf_mag = -jd_mag
+		!end if
 
 		! TODO: this is the same matrix inverted, but multiplied by a different
 		! RHS vector.  Go back to two-phase factor and solve
 		i1_r1_tng = invmul(i1, cross(r1, tng))
+
+		!! Ref:  https://gafferongames.com/post/collision_response_and_coulomb_friction/
+
+		!jf_mag = -(1.d0 + e) * dot_product(vr, tng) / &
+		!jf_mag = -e * dot_product(vr, tng) / &
+		jf_mag = -dot_product(vr, tng) / &
+			(1.d0/m1 + dot_product(tng, cross(i1_r1_tng, r1)))
+
+		! Apply friction cone clamp.  TODO: when should this be static friction?
+		jf_max = w%matls(b%matl)%friction_dyn * abs(jr_mag)
+		jf_mag = max(min(jf_mag, jf_max), -jf_max)
+
+		!print *, "jf_mag = ", jf_mag
+
+		!b%vel = v0 - jr_mag / m1 * nrm - jf / m1
+		b%vel = v0 - jr_mag / m1 * nrm - jf_mag / m1 * tng
 
 		b%ang_vel = b%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
 
@@ -1186,16 +1198,31 @@ end subroutine gram_schmidt
 
 !===============================================================================
 
-subroutine normalize(v)
+function normalize(v) result(u)
+	double precision, intent(in) :: v(:)
+	double precision, allocatable :: u(:)
+	double precision :: norm_
+	norm_ = norm2(v)
+	! TODO: DRY with subroutine version normalize_s
+	if (norm_ > 1.d-12) then
+		u = v / norm_
+	else
+		u = 0
+	endif
+end function normalize
+
+!===============================================================================
+
+subroutine normalize_s(v)
 	double precision, intent(inout) :: v(:)
 	double precision :: norm_
 	norm_ = norm2(v)
-	if (norm_ > 1.d-8) then
+	if (norm_ > 1.d-12) then
 		v = v / norm_
 	else
 		v = 0
 	endif
-end subroutine normalize
+end subroutine normalize_s
 
 !===============================================================================
 
