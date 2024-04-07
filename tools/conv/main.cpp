@@ -2,9 +2,9 @@
 #include <iostream>
 
 #include <assimp/Exporter.hpp>
-#include <assimp/Importer.hpp>      // C++ importer interface
-#include <assimp/scene.h>           // Output data structure
-#include <assimp/postprocess.h>     // Post processing flags
+#include <assimp/Importer.hpp>   // C++ importer interface
+#include <assimp/scene.h>        // Output data structure
+#include <assimp/postprocess.h>  // Post processing flags
 
 int convert(const std::string& infile, const std::string& outfile)
 {
@@ -18,33 +18,45 @@ int convert(const std::string& infile, const std::string& outfile)
 	// Usually - if speed is not the most important aspect for you - you'll
 	// probably to request more postprocessing than we do in this example.
 	const aiScene* scene = importer.ReadFile(infile,
-		aiProcess_CalcTangentSpace       |
-		aiProcess_Triangulate            |
-		aiProcess_JoinIdenticalVertices  |
+		aiProcess_CalcTangentSpace      |
+		aiProcess_Triangulate           |
+		aiProcess_JoinIdenticalVertices |
 		aiProcess_SortByPType);
 
 	// If the import failed, report it
-	if (nullptr == scene) {
+	if (scene == nullptr)
+	{
 		//DoTheErrorLogging( importer.GetErrorString());
 		std::cout << importer.GetErrorString() << std::endl;
 		return EXIT_FAILURE;
 	}
 
-	//// Now we can access the file's contents.
-	//DoTheSceneProcessing( scene);
-
 	Assimp::Exporter exporter;
 
-	// TODO: get export file type from outfile extension
-	exporter.Export(scene, "obj", outfile);
+	// TODO: file extension should probably be converted to lowercase because
+	// assimp accepts "stl" but not "STL"
+	int dot_pos = outfile.find_last_of('.');
+	std::string outfile_ext = outfile.substr(dot_pos + 1, outfile.length() - dot_pos - 1);
+	//std::string outfile_ext = "obj";
 
-	// We're done. Everything will be cleaned up by the importer destructor
-	return EXIT_SUCCESS;
+	std::cout << "outfile extension = \"" << outfile_ext << "\"" << std::endl;
+
+	int status = exporter.Export(scene, outfile_ext, outfile);
+	std::cout << "status = " << status << std::endl;
+	if (status != 0)
+	{
+		std::cout << "Error:  cannot export outfile \"" << outfile << "\"" << std::endl;
+	}
+
+	// We're done. Everything will be cleaned up by the destructors
+	return status;
 }
+
+//==============================================================================
 
 int main(int argc, char* argv[])
 {
-	std::cout << "hello conv" << std::endl;
+	//std::cout << "hello conv" << std::endl;
 
 	if (argc != 3)
 	{
