@@ -916,7 +916,7 @@ subroutine update_body(w, b, ib)
 	double precision :: p0(ND), v0(ND), rot0(ND, ND), i1_r1_nrm(ND), &
 		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
 		jr(ND), jr_mag, e, i1_lu(ND, ND), tng(ND), fe(ND), js, jd_mag, &
-		jf(ND), jf_mag, i1_r1_tng(ND), jf_max
+		jf(ND), jf_mag, i1_r1_tng(ND), jf_max, j2(2)
 
 	integer :: i, ncolliding
 	integer, allocatable :: ipiv(:)
@@ -1023,8 +1023,8 @@ subroutine update_body(w, b, ib)
 		!! Ref:  https://gafferongames.com/post/collision_response_and_coulomb_friction/
 
 		!jf_mag = -(1.d0 + e) * dot_product(vr, tng) / &
-		!jf_mag = -e * dot_product(vr, tng) / &
-		jf_mag = -dot_product(vr, tng) / &
+		jf_mag = -e * dot_product(vr, tng) / &
+		!jf_mag = -dot_product(vr, tng) / &
 			(1.d0/m1 + dot_product(tng, cross(i1_r1_tng, r1)))
 
 		! Apply friction cone clamp.  TODO: when should this be static friction?
@@ -1032,6 +1032,11 @@ subroutine update_body(w, b, ib)
 		jf_mag = max(min(jf_mag, jf_max), -jf_max)
 
 		!print *, "jf_mag = ", jf_mag
+
+		!j2 = [jr_mag, jf_mag]
+		!j2 = j2 * jr_mag / norm2(j2)
+		!jr_mag = j2(1)
+		!jf_mag = j2(2)
 
 		!b%vel = v0 - jr_mag / m1 * nrm - jf / m1
 		b%vel = v0 - jr_mag / m1 * nrm - jf_mag / m1 * tng
