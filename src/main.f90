@@ -547,7 +547,7 @@ function read_args() result(args)
 	if (error .or. args%help) then
 
 		write(*,*) fg_bold//"Usage:"//color_reset
-		write(*,*) "	ribbit <file.ribbit>"
+		write(*,*) "	ribbit <file.ribbit> [-p]"
 		write(*,*) "	ribbit -h | --help"
 		write(*,*) "	ribbit --version"
 		write(*,*)
@@ -1508,6 +1508,8 @@ program main
 	type(world_t) :: world
 
 	args  = read_args()
+	! TODO: exit success early if --help or --version
+
 	world = read_world(args%ribbit_file, args%permissive)
 	call init_world(world)
 
