@@ -1,0 +1,45 @@
+{
+	"world":
+	{
+		"grav_accel": [0, 0, -9.807],  # m/s^2
+		"t_start": 0,
+		"t_end"  : 5.0, # s
+		"dt": 0.0010417,
+		"ground_nrm": [0, 0.05, 0.9],
+		"bodies":
+		[
+			{
+				"geom": "inputs/die.obj",
+				"pos": [-0.032, 0, 0.1],
+				#"ang": [-3.1798301198642349, 0, 0],
+				"ang": [0, 0, 30],
+				"ang_vel": [0, 0, 0],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [0.032, 0, 0.1],
+				"ang": [-3.1798301198642349, 0, 0],
+				"ang_vel": [0, 0, 0],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [0, 0, 0.1],
+				#"vel": [0, 0, 0.8],
+				"ang": [0, 0, 0],
+				"ang_vel": [55, 35, 0],
+				"matl": 1
+			}
+		],
+		"matls":
+		[
+			{
+				"dens": 1500.0, # kg/m^3, cellulose
+				"friction_stat": 0.30,
+				"friction_dyn" : 0.25,
+				"coef_rest": 0.6
+			}
+		]
+	}
+}
