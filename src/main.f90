@@ -127,7 +127,215 @@ module ribbit
 		procedure :: to_str_i64
 	end interface to_str
 
+	!********
+
+	type string_t
+		character(len = :), allocatable :: s
+	end type string_t
+
+	!********
+
+	type string_vector_t
+		type(string_t), allocatable :: v(:)
+		integer :: len_, cap
+		contains
+			procedure :: push => push_string
+	end type string_vector_t
+
 contains
+
+!===============================================================================
+
+function new_string_vector() result(vector)
+
+	type(string_vector_t) :: vector
+
+	vector%len_ = 0
+	vector%cap = 2
+
+	allocate(vector%v( vector%cap ))
+
+end function new_string_vector
+
+!===============================================================================
+
+subroutine push_string(vector, val)
+
+	class(string_vector_t) :: vector
+
+	character(len = *), intent(in) :: val
+
+	!********
+
+	type(string_t) :: val_str
+	type(string_t), allocatable :: tmp(:)
+
+	integer :: tmp_cap
+
+	print *, "pushing """//val//""""
+
+	vector%len_ = vector%len_ + 1
+
+	if (vector%len_ > vector%cap) then
+		!print *, 'growing vector'
+
+		tmp_cap = 2 * vector%len_
+		allocate(tmp( tmp_cap ))
+		tmp(1: vector%cap) = vector%v
+
+		call move_alloc(tmp, vector%v)
+		vector%cap = tmp_cap
+
+	end if
+
+	val_str%s = val
+	vector%v( vector%len_ ) = val_str
+
+end subroutine push_string
+
+!===============================================================================
+
+function read_line(iu, iostat) result(str)
+
+	! c.f. aoc-2022/utils.f90 and syntran/src/utils.f90
+	!
+	! This version reads WITHOUT backspacing, so it works on stdin too
+
+	integer, intent(in) :: iu
+	integer, optional, intent(out) :: iostat
+
+	character(len = :), allocatable :: str
+
+	!********
+
+	character :: c
+	character(len = :), allocatable :: tmp
+
+	integer :: i, io, str_cap, tmp_cap
+
+	!print *, 'starting read_line()'
+
+	! Buffer string with some initial length
+	!
+	! TODO: use char_vector_t
+	str_cap = 2
+	allocate(character(len = str_cap) :: str)
+
+	! Read 1 character at a time until end
+	i = 0
+	do
+		read(iu, '(a)', advance = 'no', iostat = io) c
+
+		if (io == iostat_end) exit
+		if (io == iostat_eor) exit
+
+		! In syntran, calling readln() one more time after the initial EOF
+		! causes an infinite loop for some reason without this
+		if (io /= 0) exit
+
+		!if (c == carriage_return) exit
+		!if (c == line_feed) exit
+		i = i + 1
+
+		if (i > str_cap) then
+			!print *, 'growing str'
+
+			! Grow the buffer capacity.  What is the optimal growth factor?
+			tmp_cap = 2 * str_cap
+			allocate(character(len = tmp_cap) :: tmp)
+			tmp(1: str_cap) = str
+
+			call move_alloc(tmp, str)
+			str_cap = tmp_cap
+
+			!print *, 'str_cap  = ', str_cap
+			!print *, 'len(str) = ', len(str)
+
+		end if
+		str(i:i) = c
+
+	end do
+
+	! Trim unused chars from buffer
+	str = str(1:i)
+
+	if (io == iostat_end .or. io == iostat_eor) io = 0
+	if (present(iostat)) iostat = io
+
+end function read_line
+
+!===============================================================================
+
+function split(str_, delims) result(strs)
+
+	! TODO: this fn needs to be unit tested for edge cases like delimeters at
+	! beginning and/or end (or neither), consecutive delimeters, consecutive
+	! non-delimeters, etc.
+	!
+	! This was translated from aoc-syntran and there are lots of off-by-one
+	! differences going from syntran to fortran
+
+	character(len = *), intent(in) :: str_
+	character(len = *), intent(in) :: delims
+
+	!character(len = :), allocatable :: strs
+	type(string_vector_t) :: strs
+
+	!********
+
+	integer :: i, i0, n, nout
+
+	n = len(str_)
+	print *, "n = ", n
+
+	nout = 1
+	if (scan(str_(1:1), delims) > 0) nout = 0
+
+	strs = new_string_vector()
+
+	i = 1
+	do while (i <= n)
+		print *, "i = ", i
+		i0 = i
+
+		i = scan  (str_(i:n), delims) + i0 - 1
+		if (i < i0) i = n + 1
+
+		print *, "i0, i = ", i0, i
+
+!		if (nout >= 0) out[nout] = str_[i0: i];
+		if (nout > 0) then
+			!call strs%push(str_(i0-1: i-1))
+			call strs%push(str_(i0: i - 1))
+		end if
+
+		i0 = i
+		i = verify(str_(i:n), delims) + i0 - 1
+		if (i < i0) i = n + 1
+		!i += 1
+
+		nout = nout + 1
+	end do
+
+!	i = 0
+!	do while (i <= n)
+!		print *, "i = ", i
+!		i0 = i
+!
+!		i = scan  (str_(i:n), delims) + i0
+!		if (i < i0) i = n
+!
+!		!if (nout >= 0) out[nout] = str_[i0: i]
+!
+!		i0 = i
+!		i = verify(str_(i:n), delims) + i0
+!		if (i < i0) i = n
+!
+!		nout = nout + 1
+!	end do
+	print *, "nout = ", nout
+
+end function split
 
 !===============================================================================
 
@@ -141,8 +349,11 @@ function read_geom(filename) result(g)
 
 	character :: buf2*2
 	character(len = 2) :: ca, cb, cc
+	character(len = :), allocatable :: str_
 
-	integer :: io, fid, iv, it, ibuf(9)
+	integer :: i, io, fid, iv, it, ibuf(9), step
+
+	type(string_vector_t) :: strs
 
 	! Could be extended to switch on different file formats based on the
 	! filename extension
@@ -194,18 +405,29 @@ function read_geom(filename) result(g)
 			it = it + 1
 			backspace(fid)
 
-			read(fid, *, iostat = io) buf2, g%t(:,it)
+			! Dynamically parse string for any obj face format.  There is
+			! optional data on obj for texture and normal coordinates
 
-			!! TODO: dynamically parse string for other obj face formats
-			!read(fid, *, iostat = io) buf2, ibuf(1: 6)
-			!read(fid, "(a,i0,x,i,x,i,x,i,x,i,x,i)", iostat = io) buf2, ibuf(1: 6)
-			!read(fid, *, iostat = io) ca, ibuf(1), cb, ibuf(2), cc, ibuf(3)
-			!read(fid, "(a,i12,x,i12,x,i12)", iostat = io) buf2, ibuf(1), cb, ibuf(2), cc, ibuf(3)
-
-			!print *, "ibuf = ", ibuf
-			!stop
-
+			!read(fid, *, iostat = io) buf2, g%t(:,it)
+			str_ = read_line(fid, io)
 			call handle_read_io(filename, io)
+			print *, "str_ = """//str_//""""
+
+			strs = split(str_, "f/ "//TAB)
+			print *, "strs%len = ", strs%len_
+
+			! OBJ faces may have 3, 6, or 9 numbers.  We only care about the
+			! vertex indices
+			step = strs%len_ / 3
+
+			do i = 0, 2
+				!read(strs(i * step + 1)%s, *, iostat = io) g%t(i+1, it)
+				read(strs%v(i * step + 1)%s, *, iostat = io) g%t(i+1, it)
+				call handle_read_io(filename, io)
+			end do
+			print *, "t = ", g%t(:,it)
+
+			!call exit(0)
 
 		end if
 

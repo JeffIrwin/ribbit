@@ -9,7 +9,7 @@
 		"bodies":
 		[
 			{
-				"geom": "inputs/beam.obj",
+				"geom": "inputs/beam2.obj",
 				"pos": [0, 0, 15],
 				"ang": [15, 0, 0],
 				"matl": 1
