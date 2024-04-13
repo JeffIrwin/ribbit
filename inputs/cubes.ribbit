@@ -17,7 +17,7 @@
 				"matl": 1
 			},
 			{
-				"geom": "inputs/cubewin.obj",
+				"geom": "inputs/cube.obj",
 				"pos": [3.5, 0, 3],
 				#"vel": [0, 0, 0.8],
 				"ang": [0, 0, 0],

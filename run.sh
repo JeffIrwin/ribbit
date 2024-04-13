@@ -14,3 +14,5 @@ rm -rf scratch/ribbit-1-*.geo
 # Debug
 time fpm run --compiler ifx --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile debug -- "$arg"
 
+# TODO: release option
+
