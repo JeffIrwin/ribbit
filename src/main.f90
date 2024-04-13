@@ -377,8 +377,9 @@ function read_geom(filename) result(g)
 	it = 0
 	do
 		buf2 = ""
-		read(fid, *, iostat = io) buf2
+		read(fid, "(a2)", iostat = io, advance = "no") buf2
 		if (io == iostat_end) exit
+		if (io == iostat_eor) cycle
 		call handle_read_io(filename, io)
 
 		print *, "buf2 = """, buf2, """"
@@ -421,6 +422,11 @@ function read_geom(filename) result(g)
 			print *, "t = ", g%t(:,it)
 
 			!call exit(0)
+
+		else if (buf2(1:1) == "#" .or. buf2 == "") then
+			! Skip comment
+			read(fid, *, iostat = io) buf2
+			call handle_read_io(filename, io)
 
 		end if
 
