@@ -137,7 +137,7 @@ module ribbit
 
 	type string_vector_t
 		type(string_t), allocatable :: v(:)
-		integer :: len_, cap
+		integer :: len, cap
 		contains
 			procedure :: push => push_string
 	end type string_vector_t
@@ -152,7 +152,7 @@ function new_string_vector() result(vector)
 
 	type(string_vector_t) :: vector
 
-	vector%len_ = 0
+	vector%len = 0
 	vector%cap = 2
 
 	allocate(vector%v( vector%cap ))
@@ -176,12 +176,12 @@ subroutine push_string(vector, val)
 
 	print *, "pushing """//val//""""
 
-	vector%len_ = vector%len_ + 1
+	vector%len = vector%len + 1
 
-	if (vector%len_ > vector%cap) then
+	if (vector%len > vector%cap) then
 		!print *, 'growing vector'
 
-		tmp_cap = 2 * vector%len_
+		tmp_cap = 2 * vector%len
 		allocate(tmp( tmp_cap ))
 		tmp(1: vector%cap) = vector%v
 
@@ -191,7 +191,7 @@ subroutine push_string(vector, val)
 	end if
 
 	val_str%s = val
-	vector%v( vector%len_ ) = val_str
+	vector%v( vector%len ) = val_str
 
 end subroutine push_string
 
@@ -392,6 +392,7 @@ function read_geom(filename) result(g)
 	iv = 0
 	it = 0
 	do
+		buf2 = ""
 		read(fid, *, iostat = io) buf2
 		if (io == iostat_end) exit
 		call handle_read_io(filename, io)
@@ -417,11 +418,16 @@ function read_geom(filename) result(g)
 			print *, "str_ = """//str_//""""
 
 			strs = split(str_, "f/ "//TAB)
-			print *, "strs%len = ", strs%len_
+			print *, "strs%len = ", strs%len
+
+			if (.not. any(strs%len == [3, 6, 9])) then
+				call panic("bad face format.  Expected 3, 6, or 9 " &
+					//"numbers but got "//to_str(strs%len))
+			end if
 
 			! OBJ faces may have 3, 6, or 9 numbers.  We only care about the
 			! vertex indices
-			step = strs%len_ / 3
+			step = strs%len / 3
 
 			do i = 0, 2
 				!read(strs(i * step + 1)%s, *, iostat = io) g%t(i+1, it)
