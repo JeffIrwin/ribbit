@@ -146,6 +146,8 @@ contains
 
 !===============================================================================
 
+! TODO: split common fns into utils.f90
+
 function new_string_vector() result(vector)
 
 	type(string_vector_t) :: vector
@@ -288,10 +290,11 @@ function split(str_, delims) result(strs)
 	n = len(str_)
 	print *, "n = ", n
 
+	strs = new_string_vector()
+	if (n == 0) return
+
 	nout = 1
 	if (scan(str_(1:1), delims) > 0) nout = 0
-
-	strs = new_string_vector()
 
 	i = 1
 	do while (i <= n)
@@ -819,6 +822,8 @@ function read_world(filename, permissive) result(w)
 	type(json_core) :: json
 	type(json_file) :: file_
 	type(json_value), pointer :: p, proot, pw, pc, pp, pgc
+
+	write(*,*) "Reading file """//filename//""""
 
 	! initialize the class
 	call file_%initialize()
@@ -1644,9 +1649,9 @@ subroutine write_step(w)
 			! Copy and convert vertex positions to 4-byte real
 			r = w%bodies(ib)%geom%v
 
-			write(fid) r(1,:)
-			write(fid) r(2,:)
-			write(fid) r(3,:)
+			write(fid) [(r(1,i), i = 1, size(r,2))]
+			write(fid) [(r(2,i), i = 1, size(r,2))]
+			write(fid) [(r(3,i), i = 1, size(r,2))]
 
 			call write_c80(fid, "tria3")
 			write(fid) w%bodies(ib)%geom%nt
@@ -1682,9 +1687,9 @@ subroutine write_step(w)
 			! Copy and convert vertex positions to 4-byte real
 			r = w%bodies(ib)%geom%v
 
-			write(fid, "(es16.6)") r(1,:)
-			write(fid, "(es16.6)") r(2,:)
-			write(fid, "(es16.6)") r(3,:)
+			write(fid, "(es16.6)") [(r(1,i), i = 1, size(r,2))]
+			write(fid, "(es16.6)") [(r(2,i), i = 1, size(r,2))]
+			write(fid, "(es16.6)") [(r(3,i), i = 1, size(r,2))]
 
 			write(fid, "(a)") "tria3"
 			write(fid, "(i0)") w%bodies(ib)%geom%nt
