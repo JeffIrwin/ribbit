@@ -129,18 +129,18 @@ module ribbit
 
 	!********
 
-	type string_t
+	type str_t
 		character(len = :), allocatable :: s
-	end type string_t
+	end type str_t
 
 	!********
 
-	type string_vector_t
-		type(string_t), allocatable :: v(:)
+	type str_vec_t
+		type(str_t), allocatable :: v(:)
 		integer :: len, cap
 		contains
-			procedure :: push => push_string
-	end type string_vector_t
+			procedure :: push => push_str
+	end type str_vec_t
 
 contains
 
@@ -148,52 +148,52 @@ contains
 
 ! TODO: split common fns into utils.f90
 
-function new_string_vector() result(vector)
+function new_str_vec() result(vec)
 
-	type(string_vector_t) :: vector
+	type(str_vec_t) :: vec
 
-	vector%len = 0
-	vector%cap = 2
+	vec%len = 0
+	vec%cap = 2
 
-	allocate(vector%v( vector%cap ))
+	allocate(vec%v( vec%cap ))
 
-end function new_string_vector
+end function new_str_vec
 
 !===============================================================================
 
-subroutine push_string(vector, val)
+subroutine push_str(vec, val)
 
-	class(string_vector_t) :: vector
+	class(str_vec_t) :: vec
 
 	character(len = *), intent(in) :: val
 
 	!********
 
-	type(string_t) :: val_str
-	type(string_t), allocatable :: tmp(:)
+	type(str_t) :: val_str
+	type(str_t), allocatable :: tmp(:)
 
 	integer :: tmp_cap
 
 	!print *, "pushing """//val//""""
 
-	vector%len = vector%len + 1
+	vec%len = vec%len + 1
 
-	if (vector%len > vector%cap) then
-		!print *, 'growing vector'
+	if (vec%len > vec%cap) then
+		!print *, 'growing vec'
 
-		tmp_cap = 2 * vector%len
+		tmp_cap = 2 * vec%len
 		allocate(tmp( tmp_cap ))
-		tmp(1: vector%cap) = vector%v
+		tmp(1: vec%cap) = vec%v
 
-		call move_alloc(tmp, vector%v)
-		vector%cap = tmp_cap
+		call move_alloc(tmp, vec%v)
+		vec%cap = tmp_cap
 
 	end if
 
 	val_str%s = val
-	vector%v( vector%len ) = val_str
+	vec%v( vec%len ) = val_str
 
-end subroutine push_string
+end subroutine push_str
 
 !===============================================================================
 
@@ -217,9 +217,9 @@ function read_line(iu, iostat) result(str)
 
 	!print *, 'starting read_line()'
 
-	! Buffer string with some initial length
+	! Buffer str with some initial length
 	!
-	! TODO: use char_vector_t
+	! TODO: use char_vec_t
 	str_cap = 64
 	allocate(character(len = str_cap) :: str)
 
@@ -269,7 +269,7 @@ end function read_line
 
 !===============================================================================
 
-function split(str_, delims) result(strs)
+function split(str, delims) result(strs)
 
 	! TODO: this fn needs to be unit tested for edge cases like delimeters at
 	! beginning and/or end (or neither), consecutive delimeters, consecutive
@@ -278,45 +278,42 @@ function split(str_, delims) result(strs)
 	! This was translated from aoc-syntran and there are lots of off-by-one
 	! differences going from syntran to fortran
 
-	character(len = *), intent(in) :: str_
+	character(len = *), intent(in) :: str
 	character(len = *), intent(in) :: delims
 
 	!character(len = :), allocatable :: strs
-	type(string_vector_t) :: strs
+	type(str_vec_t) :: strs
 
 	!********
 
 	integer :: i, i0, n, nout
 
-	n = len(str_)
+	n = len(str)
 	print *, "n = ", n
 
-	strs = new_string_vector()
+	strs = new_str_vec()
 	if (n == 0) return
 
 	nout = 1
-	if (scan(str_(1:1), delims) > 0) nout = 0
+	if (scan(str(1:1), delims) > 0) nout = 0
 
 	i = 1
 	do while (i <= n)
 		!print *, "i = ", i
 		i0 = i
 
-		i = scan  (str_(i:n), delims) + i0 - 1
+		i = scan  (str(i:n), delims) + i0 - 1
 		if (i < i0) i = n + 1
 
 		!print *, "i0, i = ", i0, i
 
-!		if (nout >= 0) out[nout] = str_[i0: i];
 		if (nout > 0) then
-			!call strs%push(str_(i0-1: i-1))
-			call strs%push(str_(i0: i - 1))
+			call strs%push(str(i0: i - 1))
 		end if
 
 		i0 = i
-		i = verify(str_(i:n), delims) + i0 - 1
+		i = verify(str(i:n), delims) + i0 - 1
 		if (i < i0) i = n + 1
-		!i += 1
 
 		nout = nout + 1
 	end do
@@ -336,11 +333,11 @@ function read_geom(filename) result(g)
 
 	character :: buf2*2
 	character(len = 2) :: ca, cb, cc
-	character(len = :), allocatable :: str_
+	character(len = :), allocatable :: str
 
 	integer :: i, io, fid, iv, it, ibuf(9), step
 
-	type(string_vector_t) :: strs
+	type(str_vec_t) :: strs
 
 	! Could be extended to switch on different file formats based on the
 	! filename extension
@@ -394,15 +391,15 @@ function read_geom(filename) result(g)
 			it = it + 1
 			backspace(fid)
 
-			! Dynamically parse string for any obj face format.  There is
+			! Dynamically parse str for any obj face format.  There is
 			! optional data on obj for texture and normal coordinates
 
 			!read(fid, *, iostat = io) buf2, g%t(:,it)
-			str_ = read_line(fid, io)
+			str = read_line(fid, io)
 			call handle_read_io(filename, io)
-			print *, "str_ = """//str_//""""
+			print *, "str = """//str//""""
 
-			strs = split(str_, "f/ "//TAB)
+			strs = split(str, "f/ "//TAB)
 			print *, "strs%len = ", strs%len
 
 			if (.not. any(strs%len == [3, 6, 9])) then
@@ -659,21 +656,21 @@ subroutine get_next_arg(i, argv)
 end subroutine get_next_arg
 
 !===============================================================================
-function to_str_i32(int_) result(str_)
+function to_str_i32(int_) result(str)
 	integer(kind = 4), intent(in) :: int_
-	character(len = :), allocatable :: str_
+	character(len = :), allocatable :: str
 	character :: buffer*16
 	write(buffer, "(i0)") int_
-	str_ = trim(buffer)
+	str = trim(buffer)
 end function to_str_i32
 
 !===============================================================================
-function to_str_i64(int_) result(str_)
+function to_str_i64(int_) result(str)
 	integer(kind = 8), intent(in) :: int_
-	character(len = :), allocatable :: str_
+	character(len = :), allocatable :: str
 	character :: buffer*16
 	write(buffer, "(i0)") int_
-	str_ = trim(buffer)
+	str = trim(buffer)
 end function to_str_i64
 !===============================================================================
 
@@ -687,7 +684,7 @@ function read_args() result(args)
 
 	!********
 
-	character(len = :), allocatable :: argv, str_, url, version
+	character(len = :), allocatable :: argv, str, url, version
 
 	integer :: i, io, argc, ipos
 
@@ -712,10 +709,10 @@ function read_args() result(args)
 			args%permissive = .true.
 
 		!case ("--fmax-errors")
-		!	call get_next_arg(i, str_)
-		!	read(str_, *, iostat = io) args%maxerr
+		!	call get_next_arg(i, str)
+		!	read(str, *, iostat = io) args%maxerr
 		!	if (io /= exit_success) then
-		!		write(*,*) ERROR_STR//"--fmax-errors "//str_ &
+		!		write(*,*) ERROR_STR//"--fmax-errors "//str &
 		!			//" is not a valid integer"
 		!		error = .true.
 		!	end if
@@ -1155,7 +1152,7 @@ subroutine update_body(w, b, ib)
 	b%pos = p0 + 0.5 * (v0 + b%vel) * w%dt
 
 	! Update rotations by multiplying by a rotation matrix, not by
-	! adding vector3's!
+	! adding vec3's!
 	b%rot = matmul(get_rot(b%ang_vel * w%dt), b%rot)
 
 	! Rounding errors might accumulate after many time steps.
@@ -1430,11 +1427,11 @@ end subroutine gram_schmidt
 function normalize(v) result(u)
 	double precision, intent(in) :: v(:)
 	double precision, allocatable :: u(:)
-	double precision :: norm_
-	norm_ = norm2(v)
+	double precision :: norm
+	norm = norm2(v)
 	! TODO: DRY with subroutine version normalize_s
-	if (norm_ > 1.d-12) then
-		u = v / norm_
+	if (norm > 1.d-12) then
+		u = v / norm
 	else
 		u = 0
 	endif
@@ -1444,10 +1441,10 @@ end function normalize
 
 subroutine normalize_s(v)
 	double precision, intent(inout) :: v(:)
-	double precision :: norm_
-	norm_ = norm2(v)
-	if (norm_ > 1.d-12) then
-		v = v / norm_
+	double precision :: norm
+	norm = norm2(v)
+	if (norm > 1.d-12) then
+		v = v / norm
 	else
 		v = 0
 	endif
@@ -1468,7 +1465,7 @@ end function project
 
 function get_rot(ang) result(rot)
 
-	! Convert a vector3 ang to a rotation matrix rot
+	! Convert a vec3 ang to a rotation matrix rot
 
 	double precision, intent(in) :: ang(ND)
 	double precision :: rot(ND, ND)
@@ -1580,16 +1577,16 @@ end subroutine write_case
 
 !===============================================================================
 
-subroutine write_c80(fid, str_)
+subroutine write_c80(fid, str)
 
 	integer, intent(in) :: fid
-	character(len = *), intent(in) :: str_
+	character(len = *), intent(in) :: str
 
 	!********
 
 	character :: buf80*80
 
-	buf80 = str_
+	buf80 = str
 	buf80(len(buf80): len(buf80)) = LINE_FEED
 	write(fid) buf80
 
