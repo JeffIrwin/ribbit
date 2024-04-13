@@ -174,7 +174,7 @@ subroutine push_string(vector, val)
 
 	integer :: tmp_cap
 
-	print *, "pushing """//val//""""
+	!print *, "pushing """//val//""""
 
 	vector%len = vector%len + 1
 
@@ -220,13 +220,14 @@ function read_line(iu, iostat) result(str)
 	! Buffer string with some initial length
 	!
 	! TODO: use char_vector_t
-	str_cap = 2
+	str_cap = 64
 	allocate(character(len = str_cap) :: str)
 
 	! Read 1 character at a time until end
 	i = 0
 	do
 		read(iu, '(a)', advance = 'no', iostat = io) c
+		print *, "c = """, c, """"
 
 		if (io == iostat_end) exit
 		if (io == iostat_eor) exit
@@ -298,13 +299,13 @@ function split(str_, delims) result(strs)
 
 	i = 1
 	do while (i <= n)
-		print *, "i = ", i
+		!print *, "i = ", i
 		i0 = i
 
 		i = scan  (str_(i:n), delims) + i0 - 1
 		if (i < i0) i = n + 1
 
-		print *, "i0, i = ", i0, i
+		!print *, "i0, i = ", i0, i
 
 !		if (nout >= 0) out[nout] = str_[i0: i];
 		if (nout > 0) then
@@ -319,24 +320,7 @@ function split(str_, delims) result(strs)
 
 		nout = nout + 1
 	end do
-
-!	i = 0
-!	do while (i <= n)
-!		print *, "i = ", i
-!		i0 = i
-!
-!		i = scan  (str_(i:n), delims) + i0
-!		if (i < i0) i = n
-!
-!		!if (nout >= 0) out[nout] = str_[i0: i]
-!
-!		i0 = i
-!		i = verify(str_(i:n), delims) + i0
-!		if (i < i0) i = n
-!
-!		nout = nout + 1
-!	end do
-	print *, "nout = ", nout
+	!print *, "nout = ", nout
 
 end function split
 
@@ -397,7 +381,7 @@ function read_geom(filename) result(g)
 		if (io == iostat_end) exit
 		call handle_read_io(filename, io)
 
-		!print *, "buf2 = ", buf2
+		print *, "buf2 = """, buf2, """"
 
 		if (buf2 == "v ") then
 			iv = iv + 1
