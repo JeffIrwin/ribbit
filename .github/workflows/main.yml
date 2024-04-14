@@ -51,7 +51,7 @@ jobs:
         FPM_FC: "ifx"
       run: |
         #sudo apt install intel-oneapi-mkl-devel intel-oneapi-openmp
-        #source /opt/intel/oneapi/setvars.sh --force
+        source /opt/intel/oneapi/setvars.sh --force
         mkdir scratch
         fpm run --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile debug   -- inputs/cubes.ribbit
         fpm run --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile release -- inputs/cubes.ribbit
