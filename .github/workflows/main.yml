@@ -43,6 +43,6 @@ jobs:
       run: |
         source /opt/intel/oneapi/setvars.sh
         mkdir scratch
-        fpm run --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile debug   -- inputs/cubes.ribbit
-        fpm run --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile release -- inputs/cubes.ribbit
+        ./run.sh --debug   inputs/cubes.ribbit
+        ./run.sh --release inputs/cubes.ribbit
 
