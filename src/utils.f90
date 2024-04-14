@@ -143,7 +143,7 @@ function read_line(iu, iostat) result(str)
 	i = 0
 	do
 		read(iu, '(a)', advance = 'no', iostat = io) c
-		print *, "c = """, c, """"
+		!print *, "c = """, c, """"
 
 		if (io == iostat_end) exit
 		if (io == iostat_eor) exit
@@ -205,7 +205,7 @@ function split(str, delims) result(strs)
 	integer :: i, i0, n, nout
 
 	n = len(str)
-	print *, "n = ", n
+	!print *, "n = ", n
 
 	strs = new_str_vec()
 	if (n == 0) return

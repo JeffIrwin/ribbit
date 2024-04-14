@@ -136,7 +136,7 @@ function read_geom(filename) result(g)
 		if (io == iostat_eor) cycle
 		call handle_read_io(filename, io)
 
-		print *, "buf2 = """, buf2, """"
+		!print *, "buf2 = """, buf2, """"
 
 		if (buf2 == "v ") then
 			iv = iv + 1
@@ -151,13 +151,12 @@ function read_geom(filename) result(g)
 			! Dynamically parse str for any obj face format.  There is
 			! optional data on obj for texture and normal coordinates
 
-			!read(fid, *, iostat = io) buf2, g%t(:,it)
 			str = read_line(fid, io)
 			call handle_read_io(filename, io)
-			print *, "str = """//str//""""
+			!print *, "str = """//str//""""
 
 			strs = split(str, "f/ "//TAB)
-			print *, "strs%len = ", strs%len
+			!print *, "strs%len = ", strs%len
 
 			if (.not. any(strs%len == [3, 6, 9])) then
 				call panic("bad face format.  Expected 3, 6, or 9 " &
@@ -169,13 +168,10 @@ function read_geom(filename) result(g)
 			step = strs%len / 3
 
 			do i = 0, 2
-				!read(strs(i * step + 1)%s, *, iostat = io) g%t(i+1, it)
 				read(strs%v(i * step + 1)%s, *, iostat = io) g%t(i+1, it)
 				call handle_read_io(filename, io)
 			end do
-			print *, "t = ", g%t(:,it)
-
-			!call exit(0)
+			!print *, "t = ", g%t(:,it)
 
 		else if (buf2(1:1) == "#" .or. buf2 == "") then
 			! Skip comment

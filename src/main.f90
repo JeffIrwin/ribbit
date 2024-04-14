@@ -190,7 +190,9 @@ program main
 	type(world_t) :: world
 
 	args  = read_args()
-	! TODO: exit success early if --help or --version
+	if (args%help .or. args%version) then
+		call ribbit_exit(EXIT_SUCCESS)
+	end if
 
 	world = read_world(args%ribbit_file, args%permissive)
 	call init_world(world)

@@ -25,14 +25,6 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
-    #- uses: fortran-lang/setup-fortran@v1
-    #  id: setup-fortran
-    #  with:
-    #    compiler: intel
-    #    version: 2023.2
-    #    #compiler: ${{ matrix.toolchain.compiler }}
-    #    #version: ${{ matrix.toolchain.version }}
-
     - uses: rscohn2/setup-oneapi@v0
       with:
         list: true
@@ -47,11 +39,9 @@ jobs:
     - if: matrix.os == 'ubuntu-latest'
       name: Run fpm default
       env:
-        #FPM_FC: ${{ env.FC }}
         FPM_FC: "ifx"
       run: |
-        #sudo apt install intel-oneapi-mkl-devel intel-oneapi-openmp
-        source /opt/intel/oneapi/setvars.sh --force
+        source /opt/intel/oneapi/setvars.sh
         mkdir scratch
         fpm run --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile debug   -- inputs/cubes.ribbit
         fpm run --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile release -- inputs/cubes.ribbit
