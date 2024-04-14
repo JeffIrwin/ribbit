@@ -20,41 +20,40 @@ jobs:
 
     steps:
 
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v3
     - uses: fortran-lang/setup-fpm@v5
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - uses: fortran-lang/setup-fortran@v1
-      id: setup-fortran
-      with:
-        compiler: intel
-        version: 2023.2
-        #compiler: ${{ matrix.toolchain.compiler }}
-        #version: ${{ matrix.toolchain.version }}
+    #- uses: fortran-lang/setup-fortran@v1
+    #  id: setup-fortran
+    #  with:
+    #    compiler: intel
+    #    version: 2023.2
+    #    #compiler: ${{ matrix.toolchain.compiler }}
+    #    #version: ${{ matrix.toolchain.version }}
 
-    #- if: matrix.os == 'ubuntu-latest'
-    #  name: Set ubuntu PATH
-    #  run: |
-    #    echo "$HOME/bin" >> $GITHUB_PATH
+    - uses: rscohn2/setup-oneapi@v0
+      with:
+        list: true
+        components: |
+          ifx
+          mkl
+          openmp
+    - name: Test fortran install
+      run: |
+        source /opt/intel/oneapi/setvars.sh
+        ifx --version
 
     - if: matrix.os == 'ubuntu-latest'
       name: Run fpm default
       env:
-        FPM_FC: ${{ env.FC }}
+        #FPM_FC: ${{ env.FC }}
+        FPM_FC: "ifx"
       run: |
-        sudo apt install intel-oneapi-mkl-devel intel-oneapi-openmp
-        source /opt/intel/oneapi/setvars.sh --force
+        #sudo apt install intel-oneapi-mkl-devel intel-oneapi-openmp
+        #source /opt/intel/oneapi/setvars.sh --force
         mkdir scratch
-        fpm run --flag "-fpp -qmkl -heap-arrays0" --profile debug   -- inputs/cubes.ribbit
-        fpm run --flag "-fpp -qmkl -heap-arrays0" --profile release -- inputs/cubes.ribbit
-
-    #- if: matrix.os == 'ubuntu-latest'
-    #  run: |
-    #    sudo apt-get install gfortran
-
-    #- if: matrix.os == 'macOS-latest'
-    #  run: |
-    #    brew install gcc@12
-    #    brew reinstall gcc@12
+        fpm run --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile debug   -- inputs/cubes.ribbit
+        fpm run --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile release -- inputs/cubes.ribbit
 
