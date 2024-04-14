@@ -3,8 +3,27 @@ module ribbit
 
 	use iso_fortran_env
 	use utils
+	!use iso_c_binding, only: c_char, c_int, c_int64_t, c_size_t
 
 	implicit none
+
+	!********
+
+  !interface
+  !  !integer(c_int) function del_file() bind(c, name="del_file")
+  !  !function del_file() bind(c, name="del_file")
+  !  !end function
+  !  integer(c_int) function del_file() bind(c, name="del_file")
+  !    import :: c_char, c_int
+  !    !type(ipaddr), intent(out) :: addr
+  !    !character(c_char), intent(in) :: name(*)
+  !    !integer(c_int), value, intent(in) :: port
+  !    !integer(c_int), value, intent(in) :: mode
+  !  end function del_file
+  !end interface
+
+	! External C fns
+	integer, external :: del_file
 
 	!********
 
@@ -1192,13 +1211,15 @@ subroutine write_step(w)
 
 	!print *, "starting write_step()"
 
+	! TODO: add arg for file basename.  Encapsulate in world struct?
+	!
+	! TODO: mkdir.  wrap C fn?
+
+	geom_file = "scratch/ribbit-1-"//to_str(w%it)//".geo"
+	io = del_file(geom_file//NULL_CHAR)  ! ignore return code
+
 	if (binary) then
 
-		! TODO: add arg for filename.  Encapsulate in world struct?
-		!
-		! TODO: mkdir.  wrap C fn?
-		geom_file = "scratch/ribbit-1-"//to_str(w%it)//".geo"
-		!open(newunit = fid, form = "unformatted", access = "stream", &
 		open(newunit = fid, access = "stream", &
 			file = geom_file, action = "write", iostat = io)
 		call handle_open_write_io(geom_file, io)
@@ -1236,10 +1257,6 @@ subroutine write_step(w)
 
 	else
 
-		! TODO: add arg for filename.  Encapsulate in world struct?
-		!
-		! TODO: mkdir.  wrap C fn?
-		geom_file = "scratch/ribbit-1-"//to_str(w%it)//".geo"
 		open(newunit = fid, file = geom_file, action = "write", iostat = io)
 		call handle_open_write_io(geom_file, io)
 

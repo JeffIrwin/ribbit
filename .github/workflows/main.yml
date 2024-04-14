@@ -37,7 +37,7 @@ jobs:
         ifx --version
 
     - if: matrix.os == 'ubuntu-latest'
-      name: Run fpm default
+      name: Run ribbit fpm default
       env:
         FPM_FC: "ifx"
       run: |
