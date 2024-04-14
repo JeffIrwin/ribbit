@@ -258,36 +258,23 @@ function split(str, delims) result(strs)
 
 	integer :: i, i0, n, nout
 
-	n = len(str)
-	!print *, "n = ", n
-
 	strs = new_str_vec()
-	if (n == 0) return
 
-	nout = 1
-	if (scan(str(1:1), delims) > 0) nout = 0
+	n = len(str)
+	if (n == 0) return
 
 	i = 1
 	do while (i <= n)
-		!print *, "i = ", i
-		i0 = i
 
-		i = scan  (str(i:n), delims) + i0 - 1
+		i0 = verify(str(i:n), delims) + i - 1
+		if (i0 < i) i0 = n + 1
+
+		i  = scan(str(i0:n), delims) + i0 - 1
 		if (i < i0) i = n + 1
 
-		!print *, "i0, i = ", i0, i
+		if (i0 < i) call strs%push(str(i0: i - 1))
 
-		if (nout > 0) then
-			call strs%push(str(i0: i - 1))
-		end if
-
-		i0 = i
-		i = verify(str(i:n), delims) + i0 - 1
-		if (i < i0) i = n + 1
-
-		nout = nout + 1
 	end do
-	!print *, "nout = ", nout
 
 end function split
 
@@ -296,7 +283,7 @@ subroutine unit_test_split()
 	character(len = :), allocatable :: str
 	integer :: i
 	type(str_vec_t) :: strs
-	str = "0,12,23,34,,7,,,,45,56,,10101,"
+	str = "0,12,23,34,,7,,,,45,56,,1"
 	strs = split(str, ",")
 	!print *, "strs = ", strs%v(:)%s
 	!print *, "strs = ", [(strs%v(i)%s, i = 1, strs%len)]
