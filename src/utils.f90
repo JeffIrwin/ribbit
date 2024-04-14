@@ -53,14 +53,45 @@ module utils
 
 	!********
 
+	type str_builder_t
+		! This is basically a dynamic char vector, but the type is a str and not
+		! an actual array of single chars
+		!
+		! Syntran could benefit from this type, at least in its corresponding
+		! read_line() fn
+		character(len = :), allocatable :: s
+		integer(kind = 8) :: len, cap
+		contains
+			procedure :: &
+				push => push_str_builder, &
+				trim => trim_str_builder
+	end type str_builder_t
+
+	!********
+
 	type str_vec_t
 		type(str_t), allocatable :: v(:)
-		integer :: len, cap
+		integer(kind = 8) :: len, cap
 		contains
 			procedure :: push => push_str
 	end type str_vec_t
 
+	!********
+
 contains
+
+!===============================================================================
+
+function new_str_builder() result(sb)
+
+	type(str_builder_t) :: sb
+
+	sb%len = 0
+	sb%cap = 16
+
+	allocate(character(len = sb%cap) :: sb%s)
+
+end function new_str_builder
 
 !===============================================================================
 
@@ -77,9 +108,55 @@ end function new_str_vec
 
 !===============================================================================
 
+function trim_str_builder(sb) result(str)
+
+	class(str_builder_t), intent(in) :: sb
+	character(len = :), allocatable :: str
+
+	str = sb%s(1: sb%len)
+
+end function trim_str_builder
+
+!===============================================================================
+
+subroutine push_str_builder(sb, val)
+
+	! Push one char at a time onto a str builder.  Could generalize to push a
+	! whole primitive str of len > 1
+
+	class(str_builder_t), intent(inout) :: sb
+	character, intent(in) :: val
+
+	!********
+
+	character(len = :), allocatable :: tmp
+
+	integer(kind = 8) :: i, tmp_cap
+
+	!print *, "pushing """//val//""""
+
+	sb%len = sb%len + 1
+	if (sb%len > sb%cap) then
+		!print *, 'growing str'
+
+		! Grow the buffer capacity.  What is the optimal growth factor?
+		tmp_cap = 2 * sb%cap
+		allocate(character(len = tmp_cap) :: tmp)
+		tmp(1: sb%cap) = sb%s
+
+		call move_alloc(tmp, sb%s)
+		sb%cap = tmp_cap
+
+	end if
+	sb%s(sb%len: sb%len) = val
+
+end subroutine push_str_builder
+
+!===============================================================================
+
 subroutine push_str(vec, val)
 
-	class(str_vec_t) :: vec
+	class(str_vec_t), intent(inout) :: vec
 
 	character(len = *), intent(in) :: val
 
@@ -129,18 +206,14 @@ function read_line(iu, iostat) result(str)
 	character :: c
 	character(len = :), allocatable :: tmp
 
-	integer :: i, io, str_cap, tmp_cap
+	integer :: io
+
+	type(str_builder_t) :: sb
 
 	!print *, 'starting read_line()'
 
-	! Buffer str with some initial length
-	!
-	! TODO: use char_vec_t
-	str_cap = 64
-	allocate(character(len = str_cap) :: str)
-
 	! Read 1 character at a time until end
-	i = 0
+	sb = new_str_builder()
 	do
 		read(iu, '(a)', advance = 'no', iostat = io) c
 		!print *, "c = """, c, """"
@@ -154,29 +227,14 @@ function read_line(iu, iostat) result(str)
 
 		!if (c == carriage_return) exit
 		!if (c == line_feed) exit
-		i = i + 1
 
-		if (i > str_cap) then
-			!print *, 'growing str'
-
-			! Grow the buffer capacity.  What is the optimal growth factor?
-			tmp_cap = 2 * str_cap
-			allocate(character(len = tmp_cap) :: tmp)
-			tmp(1: str_cap) = str
-
-			call move_alloc(tmp, str)
-			str_cap = tmp_cap
-
-			!print *, 'str_cap  = ', str_cap
-			!print *, 'len(str) = ', len(str)
-
-		end if
-		str(i:i) = c
+		call sb%push(c)
 
 	end do
+	str = sb%trim()
 
-	! Trim unused chars from buffer
-	str = str(1:i)
+	!print *, "sb  = ", sb%s( 1: sb%len )
+	!print *, "str = ", str
 
 	if (io == iostat_end .or. io == iostat_eor) io = 0
 	if (present(iostat)) iostat = io

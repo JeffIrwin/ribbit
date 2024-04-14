@@ -2,7 +2,6 @@
 #include <stdio.h>
 
 #ifdef _WIN32
-	// TODO: test on Windows natively (not WSL)
 	#define DEL_FILE DEL_FILE
 #else
 	#define DEL_FILE del_file_
