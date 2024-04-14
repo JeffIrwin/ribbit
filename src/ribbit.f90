@@ -3,27 +3,8 @@ module ribbit
 
 	use iso_fortran_env
 	use utils
-	!use iso_c_binding, only: c_char, c_int, c_int64_t, c_size_t
 
 	implicit none
-
-	!********
-
-  !interface
-  !  !integer(c_int) function del_file() bind(c, name="del_file")
-  !  !function del_file() bind(c, name="del_file")
-  !  !end function
-  !  integer(c_int) function del_file() bind(c, name="del_file")
-  !    import :: c_char, c_int
-  !    !type(ipaddr), intent(out) :: addr
-  !    !character(c_char), intent(in) :: name(*)
-  !    !integer(c_int), value, intent(in) :: port
-  !    !integer(c_int), value, intent(in) :: mode
-  !  end function del_file
-  !end interface
-
-	! External C fns
-	integer, external :: del_file
 
 	!********
 
@@ -92,6 +73,11 @@ module ribbit
 		integer(kind = 8) :: it  ! time index
 
 	end type world_t
+
+	!********
+
+	! External C fns
+	integer, external :: del_file
 
 	!********
 
