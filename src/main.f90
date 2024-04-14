@@ -191,6 +191,8 @@ program main
 	type(args_t)  :: args
 	type(world_t) :: world
 
+	!call unit_test_split()
+
 	args  = read_args()
 	if (args%help .or. args%version) then
 		call ribbit_exit(EXIT_SUCCESS)

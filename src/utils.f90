@@ -245,10 +245,6 @@ end function read_line
 
 function split(str, delims) result(strs)
 
-	! TODO: this fn needs to be unit tested for edge cases like delimeters at
-	! beginning and/or end (or neither), consecutive delimeters, consecutive
-	! non-delimeters, etc.
-	!
 	! This was translated from aoc-syntran and there are lots of off-by-one
 	! differences going from syntran to fortran
 
@@ -295,6 +291,20 @@ function split(str, delims) result(strs)
 
 end function split
 
+!===============================================================================
+subroutine unit_test_split()
+	character(len = :), allocatable :: str
+	integer :: i
+	type(str_vec_t) :: strs
+	str = "0,12,23,34,,7,,,,45,56,,10101,"
+	strs = split(str, ",")
+	!print *, "strs = ", strs%v(:)%s
+	!print *, "strs = ", [(strs%v(i)%s, i = 1, strs%len)]
+	print *, "strs = "//LINE_FEED//"["
+	print "(a)", [(TAB//'"'//strs%v(i)%s//'",', i = 1, strs%len)]
+	print "(a)", "]"
+	call exit(0)
+end subroutine unit_test_split
 !===============================================================================
 
 function to_str_i32(int_) result(str)
