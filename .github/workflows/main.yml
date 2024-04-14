@@ -39,7 +39,6 @@ jobs:
         components: |
           ifx@2024.0.0
           mkl@2024.0.0
-          #openmp
     - name: Test fortran install
       run: |
         source /opt/intel/oneapi/setvars.sh
