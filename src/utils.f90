@@ -131,7 +131,7 @@ subroutine push_str_builder(sb, val)
 
 	character(len = :), allocatable :: tmp
 
-	integer(kind = 8) :: i, tmp_cap
+	integer(kind = 8) :: tmp_cap
 
 	!print *, "pushing """//val//""""
 
@@ -204,7 +204,6 @@ function read_line(iu, iostat) result(str)
 	!********
 
 	character :: c
-	character(len = :), allocatable :: tmp
 
 	integer :: io
 
@@ -256,7 +255,7 @@ function split(str, delims) result(strs)
 
 	!********
 
-	integer :: i, i0, n, nout
+	integer :: i, i0, n
 
 	strs = new_str_vec()
 

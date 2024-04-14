@@ -71,9 +71,9 @@ function read_args() result(args)
 
 	!********
 
-	character(len = :), allocatable :: argv, str, url, version
+	character(len = :), allocatable :: argv, url, version
 
-	integer :: i, io, argc, ipos
+	integer :: i, argc, ipos
 
 	logical :: error = .false.
 

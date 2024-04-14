@@ -93,11 +93,10 @@ function read_geom(filename) result(g)
 
 	!********
 
-	character :: buf2*2
-	character(len = 2) :: ca, cb, cc
+	character :: char_
 	character(len = :), allocatable :: str
 
-	integer :: i, io, fid, iv, it, ibuf(9), step
+	integer :: i, io, fid, iv, it, step
 
 	type(str_vec_t) :: strs
 
@@ -113,14 +112,14 @@ function read_geom(filename) result(g)
 
 	! First pass: count vertices and triangles
 	do
-		read(fid, *, iostat = io) buf2
+		read(fid, *, iostat = io) char_
 		if (io == iostat_end) exit
 		call handle_read_io(filename, io)
 
-		!print *, "buf2 = ", buf2
+		!print *, "char_ = ", char_
 
-		if (buf2 == "v ") g%nv = g%nv + 1
-		if (buf2 == "f ") g%nt = g%nt + 1
+		if (char_ == "v") g%nv = g%nv + 1
+		if (char_ == "f") g%nt = g%nt + 1
 
 	end do
 	rewind(fid)
@@ -135,21 +134,20 @@ function read_geom(filename) result(g)
 	iv = 0
 	it = 0
 	do
-		buf2 = ""
-		read(fid, "(a2)", iostat = io, advance = "no") buf2
+		read(fid, "(a)", iostat = io, advance = "no") char_
 		if (io == iostat_end) exit
 		if (io == iostat_eor) cycle
 		call handle_read_io(filename, io)
 
-		!print *, "buf2 = """, buf2, """"
+		!print *, "char_ = """, char_, """"
 
-		if (buf2 == "v ") then
+		if (char_ == "v") then
 			iv = iv + 1
 			backspace(fid)
-			read(fid, *, iostat = io) buf2, g%v(:,iv)
+			read(fid, *, iostat = io) char_, g%v(:,iv)
 			call handle_read_io(filename, io)
 
-		else if (buf2 == "f ") then
+		else if (char_ == "f") then
 			it = it + 1
 			backspace(fid)
 
@@ -178,9 +176,9 @@ function read_geom(filename) result(g)
 			end do
 			!print *, "t = ", g%t(:,it)
 
-		else if (buf2(1:1) == "#" .or. buf2 == "") then
+		else if (char_(1:1) == "#" .or. char_ == "") then
 			! Skip comment
-			read(fid, *, iostat = io) buf2
+			read(fid, *, iostat = io) char_
 			call handle_read_io(filename, io)
 
 		end if
@@ -386,20 +384,18 @@ function read_world(filename, permissive) result(w)
 	!********
 
 	character(len = :), allocatable :: geom_name
-	character(kind=json_CK, len = :), allocatable :: key, sval, path
+	character(kind=json_CK, len = :), allocatable :: key
 
 	double precision :: ang(ND)
 
 	integer :: ib, im
-	integer(json_IK) :: ival, count_, count_gc, i, ic, igc, index_
-	integer, allocatable :: template(:), t2(:,:)
+	integer(json_IK) :: count_, count_gc, ic, igc
 
-	logical(json_LK) :: found
 	logical, parameter :: STRICT = .false.  ! STRICT is not permissive
 
 	type(json_core) :: json
 	type(json_file) :: file_
-	type(json_value), pointer :: p, proot, pw, pc, pp, pgc
+	type(json_value), pointer :: p, proot, pw, pc, pgc
 
 	write(*,*) "Reading file """//filename//""""
 
@@ -720,11 +716,9 @@ subroutine update_body(w, b, ib)
 
 	double precision :: p0(ND), v0(ND), rot0(ND, ND), i1_r1_nrm(ND), &
 		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
-		jr(ND), jr_mag, e, i1_lu(ND, ND), tng(ND), fe(ND), js, jd_mag, &
-		jf(ND), jf_mag, i1_r1_tng(ND), jf_max, j2(2)
+		jr_mag, e, tng(ND), fe(ND), jf_mag, i1_r1_tng(ND), jf_max
 
 	integer :: i, ncolliding
-	integer, allocatable :: ipiv(:)
 
 	logical :: colliding
 
@@ -810,17 +804,6 @@ subroutine update_body(w, b, ib)
 		!tng = -tng
 		!print *, "tng = ", tng
 
-		!! Get the friction (tangential) impulse vector `jf`.  Ref: wiki ibid
-		!js = w%matls(b%matl)%friction_stat * abs(jr_mag)
-		!if (m1 * dot_product(vr, tng) <= js) then
-		!	!jf = -m1 * dot_product(vr, tng) * tng
-		!	jf_mag = -m1 * dot_product(vr, tng)
-		!else
-		!	jd_mag = w%matls(b%matl)%friction_dyn * abs(jr_mag)
-		!	!jf = -jd_mag * tng
-		!	jf_mag = -jd_mag
-		!end if
-
 		! TODO: this is the same matrix inverted, but multiplied by a different
 		! RHS vector.  Go back to two-phase factor and solve
 		i1_r1_tng = invmul(i1, cross(r1, tng))
@@ -835,15 +818,8 @@ subroutine update_body(w, b, ib)
 		! Apply friction cone clamp.  TODO: when should this be static friction?
 		jf_max = w%matls(b%matl)%friction_dyn * abs(jr_mag)
 		jf_mag = max(min(jf_mag, jf_max), -jf_max)
-
 		!print *, "jf_mag = ", jf_mag
 
-		!j2 = [jr_mag, jf_mag]
-		!j2 = j2 * jr_mag / norm2(j2)
-		!jr_mag = j2(1)
-		!jf_mag = j2(2)
-
-		!b%vel = v0 - jr_mag / m1 * nrm - jf / m1
 		b%vel = v0 - jr_mag / m1 * nrm - jf_mag / m1 * tng
 
 		b%ang_vel = b%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
@@ -1096,8 +1072,6 @@ subroutine update_pose(b)
 	type(body_t), intent(inout)  :: b
 
 	!********
-
-	integer :: i
 
 	! Rotate first and then translate by com position
 
