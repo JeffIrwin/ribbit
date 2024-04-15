@@ -31,10 +31,6 @@ jobs:
         components: |
           ifx@2024.0.0
           mkl@2024.0.0
-    - name: Test fortran install
-      run: |
-        source /opt/intel/oneapi/setvars.sh
-        ifx --version
 
     - if: matrix.os == 'ubuntu-latest'
       name: Run ribbit fpm default
@@ -42,7 +38,6 @@ jobs:
         FPM_FC: "ifx"
       run: |
         source /opt/intel/oneapi/setvars.sh
-        mkdir scratch
         ./run.sh --debug   inputs/cubes.ribbit
         ./run.sh --release inputs/cubes.ribbit
 

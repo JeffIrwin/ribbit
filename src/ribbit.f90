@@ -77,7 +77,9 @@ module ribbit
 	!********
 
 	! External C fns
-	integer, external :: del_file
+	integer, external :: &
+		del_file, &
+		make_dir
 
 	!********
 
@@ -1099,14 +1101,16 @@ subroutine write_case(w)
 
 	!********
 
-	character(len = :), allocatable :: case_file
+	character(len = :), allocatable :: case_file, dir
 
 	integer :: fid, io, i
 
-	! TODO: add arg for filename.  Encapsulate in world struct?
-	!
-	! TODO: mkdir.  wrap C fn?
-	case_file = "scratch/ribbit-1.case"
+	! TODO: add arg for dir and file basename.  Encapsulate in world struct?
+
+	dir = "scratch"
+	case_file =   dir//"/ribbit-1.case"
+	io = make_dir(dir//NULL_CHAR)  ! ignore return code
+	io = del_file(case_file//NULL_CHAR)
 
 	open(newunit = fid, file = case_file, action = "write", iostat = io)
 	call handle_open_write_io(case_file, io)
@@ -1160,7 +1164,7 @@ subroutine write_step(w)
 
 	!********
 
-	character(len = :), allocatable :: geom_file
+	character(len = :), allocatable :: geom_file, dir
 
 	integer :: fid, io, i, ib
 
@@ -1171,12 +1175,12 @@ subroutine write_step(w)
 
 	!print *, "starting write_step()"
 
-	! TODO: add arg for file basename.  Encapsulate in world struct?
-	!
-	! TODO: mkdir.  wrap C fn?
+	! TODO: add arg for dir and file basename.  Encapsulate in world struct?
 
-	geom_file = "scratch/ribbit-1-"//to_str(w%it)//".geo"
-	io = del_file(geom_file//NULL_CHAR)  ! ignore return code
+	dir = "scratch"
+	geom_file =   dir//"/ribbit-1-"//to_str(w%it)//".geo"
+	io = make_dir(dir//NULL_CHAR)  ! ignore return code
+	io = del_file(geom_file//NULL_CHAR)
 
 	if (binary) then
 
