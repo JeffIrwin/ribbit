@@ -2,20 +2,18 @@
 #include <stdio.h>
 
 #ifdef _WIN32
-	#define DEL_FILE DEL_FILE
-#else
-	#define DEL_FILE del_file_
+	#define del_file_ DEL_FILE
 #endif
-int DEL_FILE(char* filename)
+int del_file_(char* filename)
 {
 	//printf("filename = \"%s\"\n", filename);
 	return remove(filename);
 }
 
-#ifndef _WIN32
-	#define MAKE_DIR make_dir_
+#ifdef _WIN32
+	#define make_dir_ MAKE_DIR
 #endif
-int MAKE_DIR(char* dir)
+int make_dir_(char* dir)
 {
 	return mkdir(dir, 0755);
 }

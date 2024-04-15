@@ -720,7 +720,10 @@ subroutine update_body(w, b, ib)
 		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
 		jr_mag, e, tng(ND), fe(ND), jf_mag, i1_r1_tng(ND), jf_max
 
+	double precision, allocatable :: inertia_factors(:,:)
+
 	integer :: i, ncolliding
+	integer, allocatable :: ipiv(:)
 
 	logical :: colliding
 
@@ -782,7 +785,9 @@ subroutine update_body(w, b, ib)
 		! Coefficient of restitution.  TODO: average/min for two bodies
 		e = w%matls(b%matl)%coef_rest
 
-		i1_r1_nrm = invmul(i1, cross(r1, nrm))
+		inertia_factors = i1
+		call lu_factor(inertia_factors, ipiv)
+		i1_r1_nrm = lu_solve(inertia_factors, ipiv, cross(r1, nrm))
 
 		! Normal impulse magnitude.  Ref: https://en.wikipedia.org/wiki/Collision_response
 		jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
@@ -806,9 +811,7 @@ subroutine update_body(w, b, ib)
 		!tng = -tng
 		!print *, "tng = ", tng
 
-		! TODO: this is the same matrix inverted, but multiplied by a different
-		! RHS vector.  Go back to two-phase factor and solve
-		i1_r1_tng = invmul(i1, cross(r1, tng))
+		i1_r1_tng = lu_solve(inertia_factors, ipiv, cross(r1, tng))
 
 		!! Ref:  https://gafferongames.com/post/collision_response_and_coulomb_friction/
 
@@ -841,90 +844,90 @@ end subroutine update_body
 
 !===============================================================================
 
-!subroutine lu_factor(a, ipiv)
-!
-!	! Get the LU factorization of matrix A
-!
-!	! TODO: pack a and ipiv into an lu_t struct
-!	double precision, intent(inout) :: a(:, :)
-!	integer, allocatable, intent(out) :: ipiv(:)
-!
-!	!********
-!
-!	integer :: io, n, m, lda
-!
-!	!print *, "a = ", a
-!	!print *, "b = ", b
-!
-!	! In general, these sizes could have different values if b is a matrix or A
-!	! is not square
-!
-!	n = size(a, 2)
-!
-!	m   = n
-!	lda = n
-!
-!	allocate(ipiv(n))
-!
-!	!a_ = a
-!	!call dgetrf(n, nrhs, a_, lda, ipiv, x, ldb, io)
-!	call dgetrf(m, n, a, lda, ipiv, io)
-!
-!	if (io /= 0) call panic("lapack error in dgetrf()")
-!
-!	!print *, "x = ", x
-!
-!end subroutine lu_factor
-!
-!!===============================================================================
-!
-!function lu_solve(a, ipiv, b) result(x)
-!	! TODO: rename a -> lu
-!
-!	! Solve the matrix equation:
-!	!
-!	!     A * x = b
-!	!
-!	! for x:
-!	!
-!	!     x = inv(A) * b
-!	!
-!	! where `a` is already LU factorized by lu_factor().
-!
-!	double precision, intent(in) :: a(:, :), b(:)
-!	double precision, allocatable :: x(:)
-!	integer, allocatable, intent(in) :: ipiv(:)
-!
-!	!********
-!
-!	!double precision, allocatable :: a_(:,:)
-!
-!	integer :: io, n, nrhs, lda, ldb
-!
-!	!print *, "a = ", a
-!	!print *, "b = ", b
-!
-!	! In general, these sizes could have different values if b is a matrix or A
-!	! is not square
-!
-!	n = size(a, 2)
-!
-!	nrhs = 1
-!	lda = n
-!	ldb = n
-!
-!	!allocate(ipiv(n))
-!
-!	x = b
-!	!a_ = a
-!	!call dgesv(n, nrhs, a_, lda, ipiv, x, ldb, io)
-!	call dgetrs("N", n, nrhs, a, lda, ipiv, x, ldb, io)
-!
-!	if (io /= 0) call panic("lapack error in dgetrs()")
-!
-!	!print *, "x = ", x
-!
-!end function lu_solve
+subroutine lu_factor(a, ipiv)
+
+	! Get the LU factorization of matrix A
+
+	! TODO: pack a and ipiv into an lu_t struct
+	double precision, intent(inout) :: a(:, :)
+	integer, allocatable, intent(out) :: ipiv(:)
+
+	!********
+
+	integer :: io, n, m, lda
+
+	!print *, "a = ", a
+	!print *, "b = ", b
+
+	! In general, these sizes could have different values if b is a matrix or A
+	! is not square
+
+	n = size(a, 2)
+
+	m   = n
+	lda = n
+
+	allocate(ipiv(n))
+
+	!a_ = a
+	!call dgetrf(n, nrhs, a_, lda, ipiv, x, ldb, io)
+	call dgetrf(m, n, a, lda, ipiv, io)
+
+	if (io /= 0) call panic("lapack error in dgetrf()")
+
+	!print *, "x = ", x
+
+end subroutine lu_factor
+
+!===============================================================================
+
+function lu_solve(a, ipiv, b) result(x)
+	! TODO: rename a -> lu
+
+	! Solve the matrix equation:
+	!
+	!     A * x = b
+	!
+	! for x:
+	!
+	!     x = inv(A) * b
+	!
+	! where `a` is already LU factorized by lu_factor().
+
+	double precision, intent(in) :: a(:, :), b(:)
+	double precision, allocatable :: x(:)
+	integer, allocatable, intent(in) :: ipiv(:)
+
+	!********
+
+	!double precision, allocatable :: a_(:,:)
+
+	integer :: io, n, nrhs, lda, ldb
+
+	!print *, "a = ", a
+	!print *, "b = ", b
+
+	! In general, these sizes could have different values if b is a matrix or A
+	! is not square
+
+	n = size(a, 2)
+
+	nrhs = 1
+	lda = n
+	ldb = n
+
+	!allocate(ipiv(n))
+
+	x = b
+	!a_ = a
+	!call dgesv(n, nrhs, a_, lda, ipiv, x, ldb, io)
+	call dgetrs("N", n, nrhs, a, lda, ipiv, x, ldb, io)
+
+	if (io /= 0) call panic("lapack error in dgetrs()")
+
+	!print *, "x = ", x
+
+end function lu_solve
 
 !===============================================================================
 
