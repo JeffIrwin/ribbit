@@ -56,9 +56,6 @@ module utils
 	type str_builder_t
 		! This is basically a dynamic char vector, but the type is a str and not
 		! an actual array of single chars
-		!
-		! Syntran could benefit from this type, at least in its corresponding
-		! read_line() fn
 		character(len = :), allocatable :: s
 		integer(kind = 8) :: len, cap
 		contains
@@ -165,7 +162,7 @@ subroutine push_str(vec, val)
 	type(str_t) :: val_str
 	type(str_t), allocatable :: tmp(:)
 
-	integer :: tmp_cap
+	integer(kind = 8) :: tmp_cap
 
 	!print *, "pushing """//val//""""
 

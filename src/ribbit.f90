@@ -672,22 +672,29 @@ subroutine ribbit_run(w)
 	integer :: ib, io
 	integer :: fid
 
+	logical, parameter :: dump_csv = .false.
+
 	write(*,*) "starting ribbit_run()"
 
-	csv_file = "dump4.csv"
-	open(newunit = fid, file = csv_file, action = "write", iostat = io)
-	call handle_open_write_io(csv_file, io)
+	if (dump_csv) then
+		csv_file = "dump4.csv"
+		open(newunit = fid, file = csv_file, action = "write", iostat = io)
+		call handle_open_write_io(csv_file, io)
+	end if
 
 	w%t = w%t_start
 	w%it = 0
 	do while (w%t <= w%t_end)
 
 		!print *, "t, z = ", w%t, w%bodies(1)%pos(3)
-		write(fid, "(es16.6)", advance = "no") w%t
-		do ib = 1, size(w%bodies)
-			write(fid, "(3es16.6)", advance = "no") w%bodies(ib)%pos
-		end do
-		write(fid, *)
+
+		if (dump_csv) then
+			write(fid, "(es16.6)", advance = "no") w%t
+			do ib = 1, size(w%bodies)
+				write(fid, "(3es16.6)", advance = "no") w%bodies(ib)%pos
+			end do
+			write(fid, *)
+		end if
 
 		do ib = 1, size(w%bodies)
 			call update_body(w, w%bodies(ib), ib)
@@ -708,13 +715,16 @@ end subroutine ribbit_run
 
 subroutine update_body(w, b, ib)
 
-	type(world_t), intent(in) :: w
+	! This has side effects on other bodies in the world besides `b` when bodies
+	! collide with each other
+
+	type(world_t), intent(in) :: w  ! TODO: intent inout?
 	type(body_t), intent(inout) :: b
 	integer, intent(in) :: ib  ! don't check for collisions with self
 
 	!********
 
-	double precision, parameter :: tol = 0.001
+	double precision, parameter :: tol = 0.001  ! coincident vector angle-ish tol
 
 	double precision :: p0(ND), v0(ND), rot0(ND, ND), i1_r1_nrm(ND), &
 		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
@@ -726,6 +736,9 @@ subroutine update_body(w, b, ib)
 	integer :: i, ncolliding
 
 	logical :: colliding
+
+	!********
+	! Update due to gravitational acceleration
 
 	v0 = b%vel
 	b%vel = v0 + w%grav_accel * w%dt
@@ -744,6 +757,10 @@ subroutine update_body(w, b, ib)
 	call gram_schmidt(b%rot)
 
 	call update_pose(b)
+
+	!********
+	! Update due to collision with the global ground, which is like a special
+	! symbolic body with infinite inertia and extents
 
 	! In case of collision along an entire face or edge, get the centroid of
 	! that face/edge instead of just one vertex, by taking the average of all
@@ -843,6 +860,9 @@ subroutine update_body(w, b, ib)
 		!print *, ""
 
 	end if
+
+	!********
+	! TODO: Update due to collisions between bodies
 
 end subroutine update_body
 

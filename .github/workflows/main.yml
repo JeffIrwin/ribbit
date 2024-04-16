@@ -13,6 +13,9 @@ jobs:
 
       # Having multiple matrices (e.g. os *and* gfortran) will test every
       # possible combination of those two matrices!
+      #
+      # TODO: try Windows.  I had lots of recent issues running gfortran
+      # binaries on Windows, but maybe Intel fortran will have better luck
       matrix:
         os: [ubuntu-latest]
         #os: [ubuntu-latest, macOS-latest]
