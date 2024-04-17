@@ -660,6 +660,129 @@ end function get_array
 
 !===============================================================================
 
+subroutine unit_test_tri_line()
+
+	double precision :: a(ND), b(ND), c(ND), e(ND), f(ND)
+
+	double precision :: p(ND)
+	integer :: stat
+
+	! Points a, b, and c form the triangle
+	a = [1, 0, 0]
+	b = [0, 2, 0]
+	c = [0, 0, 3]
+
+	! Points e and f form the line segment
+	e = [0.2, 0.1, 0.3]
+
+	f = [0.5, 1.5, 1.0] ! valid intersection
+	!f = -[0.5, 1.5, 1.0] ! outside of line segment
+	!f = [1, -1, 3]    ! outside of triangle
+	!! TODO: test a case where line and triangle are parallel
+
+	print *, "a = ", a
+	print *, "f = ", f
+
+	call tri_line(a, b, c, e, f, p, stat)
+	! expect p = [0.358108, 0.837838, 0.668919]
+
+end subroutine unit_test_tri_line
+
+!===============================================================================
+
+subroutine tri_line(a, b, c, e, f, p, stat)
+
+	! Give a triangle formed by points `a`, `b`, and `c`, and a line segment
+	! formed by points `e` and `f`, find their intersection point `p` or whether
+	! there is no intersection
+	!
+	! `stat` is 0 if a valid intersection exists
+	!
+	! For a sketch of this geometric problem, see ribbit/doc/tri-line.png
+
+	double precision, intent(in) :: a(ND), b(ND), c(ND), e(ND), f(ND)
+
+	double precision, intent(out) :: p(ND)
+	integer, intent(out) :: stat
+
+	!********
+
+	double precision :: t, bu, bv, bw
+	double precision :: u(ND), v(ND), ef(ND)
+	double precision :: mat(6, 6), rhs(6,1)!, vars(6,1)
+	double precision, allocatable :: vars(:,:)
+
+	integer :: i
+
+	! Vectors along the triangle's edges
+	u = b - a
+	v = c - a
+
+	! Vector along line segment
+	ef = f - e
+
+	! Represent intersection point p in the triangle:
+	!
+	!     p = a + bu * u + bv * v
+
+	! Represent the point p on the line segment:
+	!
+	!     p = e + t * ef
+
+	! These form 6 equations with 6 unknowns
+
+	mat = transpose(reshape( &
+		[ &
+			1.d0, 0.d0, 0.d0,   0.d0, -u(1), -v(1), &
+			0.d0, 1.d0, 0.d0,   0.d0, -u(2), -v(2), &
+			0.d0, 0.d0, 1.d0,   0.d0, -u(3), -v(3), &
+			1.d0, 0.d0, 0.d0, -ef(1),  0.d0,  0.d0, &
+			0.d0, 1.d0, 0.d0, -ef(2),  0.d0,  0.d0, &
+			0.d0, 0.d0, 1.d0, -ef(3),  0.d0,  0.d0  &
+		], &
+		[6, 6]))
+
+	!! same thing
+	!mat = 0
+	!do i = 1, 3
+	!	mat(i  , i) = 1
+	!	mat(i+3, i) = 1
+	!end do
+	!mat(4:6, 4) = -ef
+	!mat(1:3, 5) = -u
+	!mat(1:3, 6) = -v
+
+	rhs(:,1) = [a(1), a(2), a(3), e(1), e(2), e(3)]
+
+	! Do the linear algebra
+	vars = invmul(mat, rhs)
+
+	! Unpack the answers from vars
+	p  = vars(1:3, 1)
+	t  = vars(4  , 1)  ! parametric coordinate along line segment from e to f
+	bu = vars(5  , 1)  ! barycentric coord in tri
+	bv = vars(6  , 1)  ! barycentric coord
+
+	bw = 1 - bu - bv   ! 3rd, non-independent barycentric coord
+
+	print *, "p = ", p
+
+	! TODO: set stat based on parameters t, bu, bv, bw
+
+	!! All of these parametric coordinates need to be in the range [0, 1] for the intersection to be valid
+	!mprintf("t  = %f\n", t)
+	!mprintf("bu = %f\n", bu)
+	!mprintf("bv = %f\n", bv)
+	!mprintf("bw = %f\n", bw)
+	print *, "t  = ", t
+	print *, "bu = ", bu
+	print *, "bv = ", bv
+	print *, "bw = ", bw
+
+end subroutine tri_line
+
+!===============================================================================
+
 subroutine ribbit_run(w)
 
 	use json_module
@@ -675,6 +798,9 @@ subroutine ribbit_run(w)
 	logical, parameter :: dump_csv = .false.
 
 	write(*,*) "starting ribbit_run()"
+
+	call unit_test_tri_line()
+	return  ! TODO
 
 	if (dump_csv) then
 		csv_file = "dump4.csv"
