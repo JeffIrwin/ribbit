@@ -14,7 +14,7 @@ rem case sensitivity
 
 rem echo "profile = $profile"
 
-fpm run --compiler ifx --c-compiler cl --flag "-fpp -Qmkl -heap-arrays0" --verbose --profile %profile% -- %ribbit_file%
+fpm run ribbit --compiler ifx --c-compiler cl --flag "-fpp -Qmkl -heap-arrays0" --verbose --profile %profile% -- %ribbit_file%
 
 rem TODO: build may fail because cl likes to ignore "-o" flag since it thinks
 rem it's cool to be different.  In that case, you may need to copy the

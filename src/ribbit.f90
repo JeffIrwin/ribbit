@@ -660,76 +660,6 @@ end function get_array
 
 !===============================================================================
 
-subroutine unit_test_tri_line()
-
-	double precision :: diff_norm
-	double precision :: a(ND), b(ND), c(ND), e(ND), f(ND)
-	double precision :: p(ND), pexpect(ND), diff(ND)
-	double precision :: fs(ND, 6), ps(ND, 6)
-
-	integer :: i, stat, stat_expect
-	integer, allocatable :: stats(:)
-
-	write(*,*) "starting unit_test_tri_line()"
-
-	! Points a, b, and c form the triangle
-	a = [1.d0, 0.d0, 0.d0]
-	b = [0.d0, 2.d0, 0.d0]
-	c = [0.d0, 0.d0, 3.d0]
-
-	! Points e and f form the line segment
-	e = [0.2d0, 0.1d0, 0.3d0]
-
-	fs(:,1) = [ 0.5d0,  1.5d0,  1.0d0]  ! valid intersection
-	fs(:,2) = [ 0.4d0,  1.3d0,  1.2d0]  ! valid intersection
-	fs(:,3) = [-0.5d0, -1.5d0, -1.0d0]  ! outside of line segment
-	fs(:,4) = [ 1.0d0, -1.0d0,  3.0d0]  ! outside of triangle
-	fs(:,5) = [-0.8d0,  2.1d0,  0.3d0]  ! exactly parallel
-	! TODO: test a case where line and triangle are parallel
-
-	! Expected unit test results
-	stats = [0, 0, -1, -1, -2]
-
-	!ps(:,1) = [0.358108         , 0.837838         , 0.668919] ! from scilab
-	ps(:,1) = [0.358108108108108d0, 0.837837837837838d0, 0.668918918918919d0]
-	ps(:,2) = [0.318181818181818d0, 0.809090909090909d0, 0.831818181818182d0]
-
-	do i = 1, 5
-		f = fs(:,i)
-		pexpect = ps(:,i)
-		stat_expect = stats(i)
-
-		write(*,*) ""
-		!write(*,*) "f = ", f
-		call tri_line(a, b, c, e, f, p, stat)
-		write(*,*) "stat = ", stat
-
-		if (stat /= stat_expect) then
-			call panic("tri_line test `"//to_str(i)//"` failed. got bad stat")
-		end if
-
-		if (stat /= 0) cycle
-		write(*,*) "p = ", p
-
-		diff = p - pexpect
-		!write(*,*) "diff = ", diff
-
-		diff_norm = norm2(diff)
-		write(*,*) "diff_norm = ", diff_norm
-
-		if (diff_norm > 1.d-13) then
-			call panic("tri_line test `"//to_str(i)//"` failed. got bad p coordinate")
-		end if
-
-	end do
-
-	write(*,*)
-	write(*,*) "ending unit_test_tri_line()"
-
-end subroutine unit_test_tri_line
-
-!===============================================================================
-
 subroutine tri_line(a, b, c, e, f, p, stat)
 
 	! Given a triangle formed by points `a`, `b`, and `c`, and a line segment
@@ -739,6 +669,8 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	! `stat` is 0 if a valid intersection exists
 	!
 	! For a sketch of this geometric problem, see ribbit/doc/tri-line.png
+	!
+	! c.f. https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
 
 	double precision, intent(in) :: a(ND), b(ND), c(ND), e(ND), f(ND)
 
@@ -749,7 +681,7 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 
 	double precision :: t, bu, bv, bw
 	double precision :: u(ND), v(ND), ef(ND), params(4)
-	double precision :: mat(ND, ND), rhs(ND,1)!, lhs(ND,1)
+	double precision :: mat(ND, ND), rhs(ND, 1)
 	double precision, allocatable :: lhs(:,:)
 
 	integer :: i, io
@@ -764,7 +696,7 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	! Represent intersection point p in the triangle:
 	!
 	!     p = a + bu * u + bv * v
-
+	!
 	! Represent the point p on the line segment:
 	!
 	!     p = e + t * ef
@@ -778,19 +710,12 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	!
 	! Rearrange:
 	!
-	!     -ef * t + u * bu + v * bv = e - a
+	!     u * bu + v * bv - ef * t  = e - a
+	!
+	! These are 3 equations with 3 unknowns (bu, bv, and t):
+	!
+	! mat * [bu, bv, t] = e - a
 
-	! These form 3 equations with 3 unknowns
-
-	!mat = transpose(reshape( &
-	!	[ &
-	!		-ef(1), u(1), v(1), &
-	!		-ef(2), u(2), v(2), &
-	!		-ef(3), u(3), v(3)  &
-	!	], &
-	!	[ND, ND]))
-
-	! same thing
 	mat(:, 1) = u
 	mat(:, 2) = v
 	mat(:, 3) = -ef
@@ -855,10 +780,6 @@ subroutine ribbit_run(w)
 	logical, parameter :: dump_csv = .false.
 
 	write(*,*) "starting ribbit_run()"
-
-	!! TODO: make a separate unit test exe?  Or make integration tests
-	!call unit_test_tri_line()
-	!return
 
 	if (dump_csv) then
 		csv_file = "dump4.csv"
@@ -1084,13 +1005,13 @@ subroutine collide_bodies(w, a, b)
 	! TODO: return early if bbox check passes.  Need to set and cache bbox first
 	! (in update_pose()?)
 
-	! Iterate through each triangle of body a.  TODO: only iterate through each
-	! edge once.  This will actually do each edge twice
+	! Iterate through each triangle of body a
 	do ita = 1, a%geom%nt
-	do ie = 1, NT  ! edge loop
+	do ie  = 1, NT  ! edge loop
 
-		iva1 = a%geom%t(ie           , ita)
+		iva1 = a%geom%t(    ie       , ita)
 		iva2 = a%geom%t(mod(ie,3) + 1, ita)
+		if (iva1 > iva2) cycle  ! only do each edge once
 		!print *, "iva* = ", iva1, iva2
 
 		va1 = a%geom%v(:, iva1)
@@ -1105,9 +1026,9 @@ subroutine collide_bodies(w, a, b)
 			ivb2 = b%geom%t(2, itb)
 			ivb3 = b%geom%t(3, itb)
 
-			vb1 = b%geom%v(:, ivb1)
-			vb2 = b%geom%v(:, ivb2)
-			vb3 = b%geom%v(:, ivb3)
+			vb1  = b%geom%v(:, ivb1)
+			vb2  = b%geom%v(:, ivb2)
+			vb3  = b%geom%v(:, ivb3)
 
 			call tri_line( &
 				vb1, vb2, vb3, &

@@ -12,6 +12,7 @@ set -e
 # Default arguments
 ribbit_file="inputs/cubes.ribbit"
 profile="debug"
+exe="ribbit"
 
 pos=0
 while test $# -gt 0 ; do
@@ -20,8 +21,12 @@ while test $# -gt 0 ; do
 	# TODO: add --verbose option to pass along to fpm
 	if [[ "$1" == "--release" ]] ; then
 		profile="release"
+
 	elif [[ "$1" == "--debug" ]] ; then
 		profile="debug"
+
+	elif [[ "$1" == "--test" ]] ; then
+		exe="test"
 
 	elif [[ "$pos" == "0" ]] ; then
 		ribbit_file="$1"
@@ -39,5 +44,5 @@ done
 #echo "profile = $profile"
 #exit 0
 
-time fpm run --compiler ifx --c-compiler gcc --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile $profile -- "$ribbit_file"
+time fpm run "$exe" --compiler ifx --c-compiler gcc --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile $profile -- "$ribbit_file"
 

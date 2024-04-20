@@ -35,8 +35,8 @@ name = "ribbit"
 source-dir = "src"
 main = "main.f90"
 
-#[[test]]
-#name = "test"
-#source-dir = "src/tests/"
-#main = "test.f90"
+[[test]]
+name = "test"
+source-dir = "src"
+main = "test.f90"
 

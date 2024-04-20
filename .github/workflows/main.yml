@@ -41,6 +41,10 @@ jobs:
         FPM_FC: "ifx"
       run: |
         source /opt/intel/oneapi/setvars.sh
+        ./run.sh --debug   --test
+        ./run.sh --release --test
+        ./run.sh --debug   inputs/beams.ribbit
+        ./run.sh --release inputs/beams.ribbit
         ./run.sh --debug   inputs/cubes.ribbit
         ./run.sh --release inputs/cubes.ribbit
 
