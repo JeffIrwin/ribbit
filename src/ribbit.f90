@@ -95,7 +95,7 @@ function read_geom(filename) result(g)
 
 	!********
 
-	character :: char_
+	character :: buf2*2
 	character(len = :), allocatable :: str
 
 	integer :: i, io, fid, iv, it, step
@@ -114,14 +114,14 @@ function read_geom(filename) result(g)
 
 	! First pass: count vertices and triangles
 	do
-		read(fid, *, iostat = io) char_
+		read(fid, *, iostat = io) buf2
 		if (io == iostat_end) exit
 		call handle_read_io(filename, io)
 
-		!print *, "char_ = ", char_
+		!print *, "buf2 = ", buf2
 
-		if (char_ == "v") g%nv = g%nv + 1
-		if (char_ == "f") g%nt = g%nt + 1
+		if (buf2 == "v " .or. buf2 == "v"//TAB) g%nv = g%nv + 1
+		if (buf2 == "f " .or. buf2 == "f"//TAB) g%nt = g%nt + 1
 
 	end do
 	rewind(fid)
@@ -136,20 +136,20 @@ function read_geom(filename) result(g)
 	iv = 0
 	it = 0
 	do
-		read(fid, "(a)", iostat = io, advance = "no") char_
+		read(fid, "(a)", iostat = io, advance = "no") buf2
 		if (io == iostat_end) exit
 		if (io == iostat_eor) cycle
 		call handle_read_io(filename, io)
 
-		!print *, "char_ = """, char_, """"
+		!print *, "buf2 = """, buf2, """"
 
-		if (char_ == "v") then
+		if (buf2 == "v " .or. buf2 == "v"//TAB) then
 			iv = iv + 1
 			backspace(fid)
-			read(fid, *, iostat = io) char_, g%v(:,iv)
+			read(fid, *, iostat = io) buf2, g%v(:,iv)
 			call handle_read_io(filename, io)
 
-		else if (char_ == "f") then
+		else if (buf2 == "f " .or. buf2 == "f"//TAB) then
 			it = it + 1
 			backspace(fid)
 
@@ -178,9 +178,9 @@ function read_geom(filename) result(g)
 			end do
 			!print *, "t = ", g%t(:,it)
 
-		else if (char_(1:1) == "#" .or. char_ == "") then
+		else if (buf2(1:1) == "#" .or. buf2 == "") then
 			! Skip comment
-			read(fid, *, iostat = io) char_
+			read(fid, *, iostat = io) buf2
 			call handle_read_io(filename, io)
 
 		end if
@@ -883,6 +883,7 @@ subroutine update_body(w, b, ib)
 	r1 = r1 / ncolliding
 
 	if (colliding) then
+		!print *, "ncolliding = ", ncolliding
 
 		! Collide body (body 1) with ground (body 2).  The ground has
 		! infinite mass and inertia, so many terms become zero
