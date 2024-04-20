@@ -856,8 +856,9 @@ subroutine ribbit_run(w)
 
 	write(*,*) "starting ribbit_run()"
 
-	call unit_test_tri_line()
-	return  ! TODO
+	!! TODO: make a separate unit test exe?  Or make integration tests
+	!call unit_test_tri_line()
+	!return
 
 	if (dump_csv) then
 		csv_file = "dump4.csv"
