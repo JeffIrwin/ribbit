@@ -327,8 +327,8 @@ subroutine get_inertia(b, w)
 	b%inertia(1,3) = b%inertia(3,1)
 
 	b%inertia = b%inertia * w%matls(b%matl)%dens
-	print *, "b%inertia = "
-	print "(3es16.6)", b%inertia
+	write(*,*) "b%inertia = "
+	write(*, "(3es16.6)") b%inertia
 
 	! Translate all vertices so that the center of mass is at the origin
 	do i = 1, b%geom%nv
@@ -341,9 +341,9 @@ subroutine get_inertia(b, w)
 
 	b%mass = w%matls(b%matl)%dens * b%vol
 
-	print *, "vol  = ", b%vol
-	print *, "com  = ", com
-	print *, "mass = ", b%mass
+	write(*,*) "vol  = ", b%vol
+	write(*,*) "com  = ", com
+	write(*,*) "mass = ", b%mass
 
 	! TODO: log bounding box summary
 
@@ -670,53 +670,61 @@ subroutine unit_test_tri_line()
 	integer :: i, stat, stat_expect
 	integer, allocatable :: stats(:)
 
+	write(*,*) "starting unit_test_tri_line()"
+
 	! Points a, b, and c form the triangle
-	a = [1, 0, 0]
-	b = [0, 2, 0]
-	c = [0, 0, 3]
+	a = [1.d0, 0.d0, 0.d0]
+	b = [0.d0, 2.d0, 0.d0]
+	c = [0.d0, 0.d0, 3.d0]
 
 	! Points e and f form the line segment
-	e = [0.2, 0.1, 0.3]
+	e = [0.2d0, 0.1d0, 0.3d0]
 
-	fs(:,1) =  [0.5, 1.5, 1.0]  ! valid intersection
-	fs(:,2) =  [0.4, 1.3, 1.2]  ! valid intersection
-	fs(:,3) = -[0.5, 1.5, 1.0]  ! outside of line segment
-	fs(:,4) =  [1, -1, 3]       ! outside of triangle
+	fs(:,1) = [ 0.5d0,  1.5d0,  1.0d0]  ! valid intersection
+	fs(:,2) = [ 0.4d0,  1.3d0,  1.2d0]  ! valid intersection
+	fs(:,3) = [-0.5d0, -1.5d0, -1.0d0]  ! outside of line segment
+	fs(:,4) = [ 1.0d0, -1.0d0,  3.0d0]  ! outside of triangle
+	fs(:,5) = [-0.8d0,  2.1d0,  0.3d0]  ! exactly parallel
 	! TODO: test a case where line and triangle are parallel
 
 	! Expected unit test results
-	stats = [0, 0, -1, -1]
+	stats = [0, 0, -1, -1, -2]
 
 	!ps(:,1) = [0.358108         , 0.837838         , 0.668919] ! from scilab
-	ps(:,1) = [0.358108108631935d0, 0.837837834409156d0, 0.668918922490463d0]
-	ps(:,2) = [0.318181822563909d0, 0.809090879368634d0, 0.831818213255322d0]
+	ps(:,1) = [0.358108108108108d0, 0.837837837837838d0, 0.668918918918919d0]
+	ps(:,2) = [0.318181818181818d0, 0.809090909090909d0, 0.831818181818182d0]
 
-	do i = 1, 4
+	do i = 1, 5
 		f = fs(:,i)
 		pexpect = ps(:,i)
 		stat_expect = stats(i)
 
-		print *, ""
-		print *, "f = ", f
+		write(*,*) ""
+		!write(*,*) "f = ", f
 		call tri_line(a, b, c, e, f, p, stat)
+		write(*,*) "stat = ", stat
 
 		if (stat /= stat_expect) then
 			call panic("tri_line test `"//to_str(i)//"` failed. got bad stat")
 		end if
 
 		if (stat /= 0) cycle
+		write(*,*) "p = ", p
 
 		diff = p - pexpect
-		print *, "diff = ", diff
+		!write(*,*) "diff = ", diff
 
 		diff_norm = norm2(diff)
-		print *, "diff_norm = ", diff_norm
+		write(*,*) "diff_norm = ", diff_norm
 
 		if (diff_norm > 1.d-13) then
 			call panic("tri_line test `"//to_str(i)//"` failed. got bad p coordinate")
 		end if
 
 	end do
+
+	write(*,*)
+	write(*,*) "ending unit_test_tri_line()"
 
 end subroutine unit_test_tri_line
 
@@ -741,10 +749,10 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 
 	double precision :: t, bu, bv, bw
 	double precision :: u(ND), v(ND), ef(ND), params(4)
-	double precision :: mat(6, 6), rhs(6,1)!, vars(6,1)
-	double precision, allocatable :: vars(:,:)
+	double precision :: mat(ND, ND), rhs(ND,1)!, lhs(ND,1)
+	double precision, allocatable :: lhs(:,:)
 
-	integer :: i
+	integer :: i, io
 
 	! Vectors along the triangle's edges
 	u = b - a
@@ -760,60 +768,62 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	! Represent the point p on the line segment:
 	!
 	!     p = e + t * ef
+	!
+	! Eliminate p:
+	!
+	!     p = a + bu * u + bv * v
+	!     p = e + t * ef
+	!
+	!     a + bu * u + bv * v = e + t * ef
+	!
+	! Rearrange:
+	!
+	!     -ef * t + u * bu + v * bv = e - a
 
-	! These form 6 equations with 6 unknowns
+	! These form 3 equations with 3 unknowns
 
-	mat = transpose(reshape( &
-		[ &
-			1.d0, 0.d0, 0.d0,   0.d0, -u(1), -v(1), &
-			0.d0, 1.d0, 0.d0,   0.d0, -u(2), -v(2), &
-			0.d0, 0.d0, 1.d0,   0.d0, -u(3), -v(3), &
-			1.d0, 0.d0, 0.d0, -ef(1),  0.d0,  0.d0, &
-			0.d0, 1.d0, 0.d0, -ef(2),  0.d0,  0.d0, &
-			0.d0, 0.d0, 1.d0, -ef(3),  0.d0,  0.d0  &
-		], &
-		[6, 6]))
+	!mat = transpose(reshape( &
+	!	[ &
+	!		-ef(1), u(1), v(1), &
+	!		-ef(2), u(2), v(2), &
+	!		-ef(3), u(3), v(3)  &
+	!	], &
+	!	[ND, ND]))
 
-	!! same thing
-	!mat = 0
-	!do i = 1, 3
-	!	mat(i  , i) = 1
-	!	mat(i+3, i) = 1
-	!end do
-	!mat(4:6, 4) = -ef
-	!mat(1:3, 5) = -u
-	!mat(1:3, 6) = -v
+	! same thing
+	mat(:, 1) = u
+	mat(:, 2) = v
+	mat(:, 3) = -ef
 
-	rhs(:,1) = [a(1), a(2), a(3), e(1), e(2), e(3)]
+	rhs(:, 1) = e - a
 
 	! Do the linear algebra
-	vars = invmul(mat, rhs)
+	lhs = invmul(mat, rhs, io)
+	if (io /= 0) then
+		!write(*,*) WARN_STR//"line segment and triangle are parallel"
+		stat = -2
+		return
+	end if
 
-	! Unpack the answers from vars
-	p  = vars(1:3, 1)
-	t  = vars(4  , 1)  ! parametric coordinate along line segment from e to f
-	bu = vars(5  , 1)  ! barycentric coord in tri
-	bv = vars(6  , 1)  ! barycentric coord
+	! Unpack the answers from lhs
+	bu = lhs(1, 1)  ! barycentric coord in tri
+	bv = lhs(2, 1)  ! barycentric coord
+	t  = lhs(3, 1)  ! parametric coordinate along line segment from e to f
 
-	bw = 1 - bu - bv   ! 3rd, non-independent barycentric coord
-
-	print *, "p = ", p
-
-	! TODO: set stat based on parameters t, bu, bv, bw
+	bw = 1.d0 - bu - bv   ! 3rd, non-independent barycentric coord
 
 	!! All of these parametric coordinates need to be in the range [0, 1] for the intersection to be valid
-	!mprintf("t  = %f\n", t)
-	!mprintf("bu = %f\n", bu)
-	!mprintf("bv = %f\n", bv)
-	!mprintf("bw = %f\n", bw)
-	print *, "t  = ", t
-	print *, "bu = ", bu
-	print *, "bv = ", bv
-	print *, "bw = ", bw
+	!print *, "t  = ", t
+	!print *, "bu = ", bu
+	!print *, "bv = ", bv
+	!print *, "bw = ", bw
 
 	params = [t, bu, bv, bw]
 	stat = 0
 
+	! Skip p coordinate calculation if intersection is invalid.  Could return
+	! different status codes if virtual intersection is outside of line segment
+	! vs outside of triangle
 	if (any(params < 0)) then
 		stat = -1
 		return
@@ -823,6 +833,8 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 		stat = -1
 		return
 	end if
+
+	p = e + t * ef
 
 end subroutine tri_line
 
@@ -1126,7 +1138,7 @@ end subroutine update_body
 
 !===============================================================================
 
-function invmul(a, b) result(x)
+function invmul(a, b, iostat) result(x)
 
 	! Solve the matrix equation:
 	!
@@ -1138,6 +1150,8 @@ function invmul(a, b) result(x)
 
 	double precision, intent(in) :: a(:,:), b(:,:)
 	double precision, allocatable :: x(:,:)
+
+	integer, intent(out), optional :: iostat
 
 	!********
 
@@ -1164,7 +1178,11 @@ function invmul(a, b) result(x)
 	a_ = a
 	call dgesv(n, nrhs, a_, lda, ipiv, x, ldb, io)
 
-	if (io /= 0) call panic("lapack error in dgesv()")
+	if (present(iostat)) then
+		iostat = io
+	else
+		if (io /= 0) call panic("lapack error in dgesv()")
+	end if
 
 	!print *, "x = ", x
 
