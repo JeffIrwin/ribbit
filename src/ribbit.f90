@@ -902,7 +902,7 @@ subroutine update_body(w, b, ib)
 	! This has side effects on other bodies in the world besides `b` when bodies
 	! collide with each other
 
-	type(world_t), intent(in) :: w  ! TODO: intent inout?
+	type(world_t), intent(inout) :: w
 	type(body_t), intent(inout) :: b
 	integer, intent(in) :: ib  ! don't check for collisions with self
 
@@ -917,7 +917,7 @@ subroutine update_body(w, b, ib)
 	double precision :: rhs(ND,2)
 	double precision, allocatable :: tmp(:,:)
 
-	integer :: i, ncolliding
+	integer :: i, ncolliding, ia
 
 	logical :: colliding
 
@@ -1046,9 +1046,87 @@ subroutine update_body(w, b, ib)
 	end if
 
 	!********
-	! TODO: Update due to collisions between bodies
+	! Update due to collisions between bodies
+
+	print *, "w%it = ", w%it
+	do ia = 1, size(w%bodies)
+		if (ia == ib) cycle
+		call collide_bodies(w, w%bodies(ia), w%bodies(ib))
+	end do
 
 end subroutine update_body
+
+!===============================================================================
+
+subroutine collide_bodies(w, a, b)
+
+	! Check if any edge of body `a` collides with any face of body `b`.  If so,
+	! update their outgoing velocity states
+
+	type(world_t), intent(in) :: w
+	type(body_t), intent(inout) :: a, b
+
+	!********
+
+	double precision :: va1(ND), va2(ND)
+	double precision :: vb1(ND), vb2(ND), vb3(ND)
+	double precision :: p(ND)
+
+	integer :: stat
+	integer :: ita, ie, iva1, iva2
+	integer :: itb, ivb1, ivb2, ivb3
+
+	!print *, "starting collide_bodies()"
+	!print *, "a%pos = ", a%pos
+	!print *, "b%pos = ", b%pos
+	!print *, ""
+
+	! TODO: return early if bbox check passes.  Need to set and cache bbox first
+	! (in update_pose()?)
+
+	! Iterate through each triangle of body a.  TODO: only iterate through each
+	! edge once.  This will actually do each edge twice
+	do ita = 1, a%geom%nt
+	do ie = 1, NT  ! edge loop
+
+		iva1 = a%geom%t(ie           , ita)
+		iva2 = a%geom%t(mod(ie,3) + 1, ita)
+		!print *, "iva* = ", iva1, iva2
+
+		va1 = a%geom%v(:, iva1)
+		va2 = a%geom%v(:, iva2)
+		!print *, "va1 = ", va1
+		!print *, "va2 = ", va2
+
+		! Iterate through each triangle of body b
+		do itb = 1, b%geom%nt
+
+			ivb1 = b%geom%t(1, itb)
+			ivb2 = b%geom%t(2, itb)
+			ivb3 = b%geom%t(3, itb)
+
+			vb1 = b%geom%v(:, ivb1)
+			vb2 = b%geom%v(:, ivb2)
+			vb3 = b%geom%v(:, ivb3)
+
+			call tri_line( &
+				vb1, vb2, vb3, &
+				va1, va2, &
+				p, stat)
+
+			if (stat == 0) then
+				print *, "collision detected"
+
+				! TODO: update bodies' states for the collision response
+
+			end if
+
+		end do
+
+	end do
+	end do
+
+end subroutine collide_bodies
 
 !===============================================================================
 
