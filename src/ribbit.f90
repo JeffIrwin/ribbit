@@ -662,10 +662,13 @@ end function get_array
 
 subroutine unit_test_tri_line()
 
+	double precision :: diff_norm
 	double precision :: a(ND), b(ND), c(ND), e(ND), f(ND)
+	double precision :: p(ND), pexpect(ND), diff(ND)
+	double precision :: fs(ND, 6), ps(ND, 6)
 
-	double precision :: p(ND)
-	integer :: stat
+	integer :: i, stat, stat_expect
+	integer, allocatable :: stats(:)
 
 	! Points a, b, and c form the triangle
 	a = [1, 0, 0]
@@ -675,16 +678,45 @@ subroutine unit_test_tri_line()
 	! Points e and f form the line segment
 	e = [0.2, 0.1, 0.3]
 
-	f = [0.5, 1.5, 1.0] ! valid intersection
-	!f = -[0.5, 1.5, 1.0] ! outside of line segment
-	!f = [1, -1, 3]    ! outside of triangle
-	!! TODO: test a case where line and triangle are parallel
+	fs(:,1) =  [0.5, 1.5, 1.0]  ! valid intersection
+	fs(:,2) =  [0.4, 1.3, 1.2]  ! valid intersection
+	fs(:,3) = -[0.5, 1.5, 1.0]  ! outside of line segment
+	fs(:,4) =  [1, -1, 3]       ! outside of triangle
+	! TODO: test a case where line and triangle are parallel
 
-	print *, "a = ", a
-	print *, "f = ", f
+	! Expected unit test results
+	stats = [0, 0, -1, -1]
 
-	call tri_line(a, b, c, e, f, p, stat)
-	! expect p = [0.358108, 0.837838, 0.668919]
+	!ps(:,1) = [0.358108         , 0.837838         , 0.668919] ! from scilab
+	ps(:,1) = [0.358108108631935d0, 0.837837834409156d0, 0.668918922490463d0]
+	ps(:,2) = [0.318181822563909d0, 0.809090879368634d0, 0.831818213255322d0]
+
+	do i = 1, 4
+		f = fs(:,i)
+		pexpect = ps(:,i)
+		stat_expect = stats(i)
+
+		print *, ""
+		print *, "f = ", f
+		call tri_line(a, b, c, e, f, p, stat)
+
+		if (stat /= stat_expect) then
+			call panic("tri_line test `"//to_str(i)//"` failed. got bad stat")
+		end if
+
+		if (stat /= 0) cycle
+
+		diff = p - pexpect
+		print *, "diff = ", diff
+
+		diff_norm = norm2(diff)
+		print *, "diff_norm = ", diff_norm
+
+		if (diff_norm > 1.d-13) then
+			call panic("tri_line test `"//to_str(i)//"` failed. got bad p coordinate")
+		end if
+
+	end do
 
 end subroutine unit_test_tri_line
 
@@ -692,7 +724,7 @@ end subroutine unit_test_tri_line
 
 subroutine tri_line(a, b, c, e, f, p, stat)
 
-	! Give a triangle formed by points `a`, `b`, and `c`, and a line segment
+	! Given a triangle formed by points `a`, `b`, and `c`, and a line segment
 	! formed by points `e` and `f`, find their intersection point `p` or whether
 	! there is no intersection
 	!
@@ -708,7 +740,7 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	!********
 
 	double precision :: t, bu, bv, bw
-	double precision :: u(ND), v(ND), ef(ND)
+	double precision :: u(ND), v(ND), ef(ND), params(4)
 	double precision :: mat(6, 6), rhs(6,1)!, vars(6,1)
 	double precision, allocatable :: vars(:,:)
 
@@ -778,6 +810,19 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	print *, "bu = ", bu
 	print *, "bv = ", bv
 	print *, "bw = ", bw
+
+	params = [t, bu, bv, bw]
+	stat = 0
+
+	if (any(params < 0)) then
+		stat = -1
+		return
+	end if
+
+	if (any(params > 1)) then
+		stat = -1
+		return
+	end if
 
 end subroutine tri_line
 
