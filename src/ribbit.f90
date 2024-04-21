@@ -52,6 +52,9 @@ module ribbit
 		double precision :: vol, mass
 		double precision :: inertia(ND, ND)
 
+		! previous pose
+		double precision :: pos0(ND), rot0(ND, ND)
+
 	end type body_t
 
 	!********
@@ -731,11 +734,11 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	end if
 
 	! Unpack the answers from lhs
-	bu = lhs(1, 1)  ! barycentric coord in tri
-	bv = lhs(2, 1)  ! barycentric coord
+	bu = lhs(1, 1)  ! barycentric coordinate in tri
+	bv = lhs(2, 1)  ! barycentric coordinate
 	t  = lhs(3, 1)  ! parametric coordinate along line segment from e to f
 
-	bw = 1.d0 - bu - bv   ! 3rd, non-independent barycentric coord
+	bw = 1.d0 - bu - bv   ! 3rd, non-independent barycentric coordinate
 
 	!! All of these parametric coordinates need to be in the range [0, 1] for the intersection to be valid
 	!print *, "t  = ", t
@@ -802,6 +805,10 @@ subroutine ribbit_run(w)
 		end if
 
 		do ib = 1, size(w%bodies)
+			call cache_body(w%bodies(ib))
+		end do
+
+		do ib = 1, size(w%bodies)
 			call update_body(w, w%bodies(ib), ib)
 		end do
 
@@ -815,6 +822,17 @@ subroutine ribbit_run(w)
 	write(*,*) "ending ribbit_run()"
 
 end subroutine ribbit_run
+
+!===============================================================================
+
+subroutine cache_body(b)
+	! Save initial pose
+	type(body_t), intent(inout) :: b
+
+	b%pos0 = b%pos
+	b%rot0 = b%rot
+
+end subroutine cache_body
 
 !===============================================================================
 
@@ -848,8 +866,8 @@ subroutine update_body(w, b, ib)
 	v0 = b%vel
 	b%vel = v0 + w%grav_accel * w%dt
 
-	p0   = b%pos
-	rot0 = b%rot
+	p0   = b%pos0
+	rot0 = b%rot0
 
 	b%pos = p0 + 0.5 * (v0 + b%vel) * w%dt
 
@@ -861,7 +879,7 @@ subroutine update_body(w, b, ib)
 	! Re-orthonormalize just in case
 	call gram_schmidt(b%rot)
 
-	call update_pose(b)
+	call update_vertices(b)
 
 	!********
 	! Update due to collision with the global ground, which is like a special
@@ -932,7 +950,7 @@ subroutine update_body(w, b, ib)
 		i1_r1_nrm = tmp(:,1)
 		i1_r1_tng = tmp(:,2)
 
-		! Coefficient of restitution.  TODO: average/min for two bodies
+		! Coefficient of restitution
 		e = w%matls(b%matl)%coef_rest
 
 		! Normal impulse magnitude.  Ref: https://en.wikipedia.org/wiki/Collision_response
@@ -961,7 +979,7 @@ subroutine update_body(w, b, ib)
 		b%pos = p0
 		b%rot = rot0
 
-		call update_pose(b)
+		call update_vertices(b)
 
 		!print *, ""
 
@@ -990,13 +1008,18 @@ subroutine collide_bodies(w, a, b)
 
 	!********
 
-	double precision :: va1(ND), va2(ND)
-	double precision :: vb1(ND), vb2(ND), vb3(ND)
-	double precision :: p(ND)
+	double precision, parameter :: tol = 0.001  ! coincident vector angle-ish tol
 
-	integer :: stat
-	integer :: ita, ie, iva1, iva2
-	integer :: itb, ivb1, ivb2, ivb3
+	double precision :: va1(ND), va2(ND), vb1(ND), vb2(ND), vb3(ND), p(ND), &
+		r(ND), r1(ND), r2(ND), nrm(ND), vp1(ND), vp2(ND), vr(ND), m1, m2, &
+		i1(ND,ND), i2(ND,ND), fe1(ND), fe2(ND), tng(ND), i1_r1_nrm(ND), &
+		i1_r1_tng(ND), i2_r2_nrm(ND), i2_r2_tng(ND), e, jr_mag, jf_mag, &
+		friction_dyn, jf_max, va0(ND), vb0(ND), pa0(ND), pb0(ND), &
+		rota0(ND,ND), rotb0(ND,ND)
+	double precision :: rhs(ND,2)
+	double precision, allocatable :: tmp(:,:)
+
+	integer :: stat, ita, ie, iva1, iva2, itb, ivb1, ivb2, ivb3, nr
 
 	!print *, "starting collide_bodies()"
 	!print *, "a%pos = ", a%pos
@@ -1004,9 +1027,13 @@ subroutine collide_bodies(w, a, b)
 	!print *, ""
 
 	! TODO: return early if bbox check passes.  Need to set and cache bbox first
-	! (in update_pose()?)
+	! (in update_vertices()?)
 
-	! Iterate through each triangle of body a
+	! Iterate through each triangle of body `a` and get the average position `r` and
+	! normal `nrm` of the collision point in the global coordinate system
+	r   = 0.d0
+	nrm = 0.d0
+	nr = 0
 	do ita = 1, a%geom%nt
 	do ie  = 1, NT  ! edge loop
 
@@ -1039,7 +1066,12 @@ subroutine collide_bodies(w, a, b)
 			if (stat == 0) then
 				print *, "collision detected"
 
-				! TODO: update bodies' states for the collision response
+				print *, "p = ", p
+
+				nr = nr + 1
+
+				r = r + p
+				nrm = nrm + cross(vb2 - vb1, vb3 - vb1)
 
 			end if
 
@@ -1047,6 +1079,169 @@ subroutine collide_bodies(w, a, b)
 
 	end do
 	end do
+
+	if (nr == 0) return  ! no collision
+
+	r = r / nr
+
+	!! No need to average.  Normalization will take care of scaling
+	!nrm = nrm / nr
+	call normalize_s(nrm)
+
+	print *, "r = ", r
+	print *, "nrm = ", nrm
+	!print *, "nr = ", nr
+
+	! Get collision point coordinate relative to each bodies' center of mass
+	r1 = r - a%pos
+	r2 = r - b%pos
+
+	print *, "r1 = ", r1
+	print *, "r2 = ", r2
+
+	! Collide body `a` (body 1) with `b` (body 2).  This is similar to the
+	! body-to-ground collision case, but now there are two actual bodies
+
+	! Velocities of each bodies' points *at point of contact* (not
+	! center of mass)
+	vp1 = a%vel + cross(a%ang_vel, r1)
+	vp2 = b%vel + cross(b%ang_vel, r2)
+	!vp1 = v0 + cross(a%ang_vel, r1)
+
+	! Relative velocity
+	vr = vp2 - vp1
+
+	!! Already calculated above
+	!nrm = -w%ground_nrm
+
+	! Mass and inertia *in world frame of reference*
+	m1 = a%mass
+	m2 = b%mass
+	i1 = matmul(matmul(a%rot, a%inertia), transpose(a%rot))
+	i2 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
+
+	! Sum of external forces acting on body
+	fe1 = m1 * w%grav_accel
+	fe2 = m2 * w%grav_accel
+	!print *, "fe = ", fe
+
+	! Tangent vector
+	if (abs(dot_product(normalize(vr), nrm)) > tol) then
+		tng = vr - dot_product(vr, nrm) * nrm
+		call normalize_s(tng)
+
+	! TODO: how should the next two cases be distinguished?  Maybe the condition
+	! should be based on relative acceleration instead of relative forces?
+	! Subtract accel from each other?
+	else if (norm2(fe1) >= norm2(fe2) .and. &
+		abs(dot_product(normalize(fe1), nrm)) > tol) then
+
+		tng = fe1 - dot_product(fe1, nrm) * nrm
+		call normalize_s(tng)
+
+	else if (abs(dot_product(normalize(fe2), nrm)) > tol) then
+		tng = fe2 - dot_product(fe2, nrm) * nrm
+		call normalize_s(tng)
+
+	else
+		tng = 0
+	end if
+	!tng = -tng
+	!print *, "tng = ", tng
+
+	!********
+	! Pack data into a matrix for lapack
+	rhs(:,1) = cross(r1, nrm)
+	rhs(:,2) = cross(r1, tng)
+
+	tmp = invmul(i1, rhs)
+
+	! Unpack
+	i1_r1_nrm = tmp(:,1)
+	i1_r1_tng = tmp(:,2)
+
+	!********
+	! Pack data into a matrix for lapack
+	rhs(:,1) = cross(r2, nrm)
+	rhs(:,2) = cross(r2, tng)
+
+	tmp = invmul(i2, rhs)
+
+	! Unpack
+	i2_r2_nrm = tmp(:,1)
+	i2_r2_tng = tmp(:,2)
+
+	! Coefficient of restitution
+	e = 0.5d0 * ( &
+		w%matls(a%matl)%coef_rest + &
+		w%matls(b%matl)%coef_rest &
+	)
+
+	! Normal impulse magnitude.  Ref: https://en.wikipedia.org/wiki/Collision_response
+	jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
+		(1.d0 / m1 + 1.d0 / m2 + &
+		dot_product(nrm, cross(i1_r1_nrm, r1)) + &
+		dot_product(nrm, cross(i2_r2_nrm, r2))) ! TODO: factor out dot nrm term like wikipedia
+	!print *, "jr_mag = ", jr_mag
+
+	! Ref:  https://gafferongames.com/post/collision_response_and_coulomb_friction/
+
+	! TODO: if the `e` fudge factor is changed, make sure to change the
+	! body-to-ground case too
+	jf_mag = -e * dot_product(vr, tng) / &
+	!jf_mag = -(1.d0 + e) * dot_product(vr, tng) / &
+	!jf_mag = -dot_product(vr, tng) / &
+		(1.d0 / m1 +  + 1.d0 / m2 + &
+		dot_product(tng, cross(i1_r1_tng, r1)) + &
+		dot_product(tng, cross(i2_r2_tng, r2)))
+
+	friction_dyn = 0.5d0 * ( &
+		w%matls(a%matl)%friction_dyn + &
+		w%matls(b%matl)%friction_dyn &
+	)
+
+	! Apply friction cone clamp.  TODO: when should this be static friction?
+	jf_max = friction_dyn * abs(jr_mag)
+	jf_mag = max(min(jf_mag, jf_max), -jf_max)
+	!print *, "jf_mag = ", jf_mag
+
+	!********
+	va0   = a%vel
+	vb0   = b%vel
+
+	! Previous states
+
+	pa0   = a%pos0
+	rota0 = a%rot0
+
+	pb0   = b%pos0
+	rotb0 = b%rot0
+
+	!********
+
+	a%vel = va0 - jr_mag * nrm / m1 - jf_mag * tng / m1
+
+	a%ang_vel = a%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
+
+	!print *, "a%ang_vel", a%ang_vel
+
+	a%pos = pa0
+	a%rot = rota0
+	call update_vertices(a)
+
+	!********
+
+	b%vel = vb0 + jr_mag * nrm / m2 + jf_mag * tng / m2
+
+	b%ang_vel = b%ang_vel + jr_mag * i2_r2_nrm + jf_mag * i2_r2_tng
+
+	!print *, "b%ang_vel", b%ang_vel
+
+	b%pos = pb0
+	b%rot = rotb0
+	call update_vertices(b)
+
+	!print *, ""
 
 end subroutine collide_bodies
 
@@ -1286,7 +1481,7 @@ end function get_rot
 
 !===============================================================================
 
-subroutine update_pose(b)
+subroutine update_vertices(b)
 
 	type(body_t), intent(inout)  :: b
 
@@ -1307,7 +1502,7 @@ subroutine update_pose(b)
 
 	!print *, "done"
 
-end subroutine update_pose
+end subroutine update_vertices
 
 !===============================================================================
 
