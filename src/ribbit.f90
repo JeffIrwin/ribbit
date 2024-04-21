@@ -1071,7 +1071,9 @@ subroutine collide_bodies(w, a, b)
 				nr = nr + 1
 
 				r = r + p
-				nrm = nrm + cross(vb2 - vb1, vb3 - vb1)
+
+				! Normal vector is outward from body `b` (inward to body `a`)
+				nrm = nrm + normalize(cross(vb2 - vb1, vb3 - vb1))
 
 			end if
 
@@ -1084,9 +1086,8 @@ subroutine collide_bodies(w, a, b)
 
 	r = r / nr
 
-	!! No need to average.  Normalization will take care of scaling
-	!nrm = nrm / nr
-	call normalize_s(nrm)
+	nrm = nrm / nr
+	!call normalize_s(nrm)
 
 	print *, "r = ", r
 	print *, "nrm = ", nrm
