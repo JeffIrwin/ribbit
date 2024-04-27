@@ -12,14 +12,12 @@
 			{
 				"geom": "inputs/tet2.obj",
 				"pos": [0, 0,  3],
-				"ang": [0, 0, 0],
 				"vel": [0, 0, -2],
 				"matl": 1
 			},
 			{
 				"geom": "inputs/tet2.obj",
 				"pos": [0.8, 0, 0],
-				"ang": [0, 0, 0],
 				"vel": [0, 0, 1],
 				"matl": 1
 			}

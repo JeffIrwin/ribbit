@@ -515,11 +515,6 @@ function read_world(filename, permissive) result(w)
 				case ("ang")
 					ang = get_array(json, pgc, ND)
 
-					! Convert from degrees to radians, and then to rotation matrix
-					!
-					! TODO: initialize rot by default ang above
-					w%bodies(ib)%rot = get_rot(PI / 180.d0 * ang)
-
 				case ("ang_vel")
 					w%bodies(ib)%ang_vel = get_array(json, pgc, ND)
 					!print *, "w%bodies(ib)%ang_vel", w%bodies(ib)%ang_vel
@@ -536,6 +531,10 @@ function read_world(filename, permissive) result(w)
 				end select
 
 			end do
+
+			! Convert from degrees to radians, and then to rotation matrix
+			w%bodies(ib)%rot = get_rot(PI / 180.d0 * ang)
+
 		end do
 
 	case ("matls")
