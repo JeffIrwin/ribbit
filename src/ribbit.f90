@@ -379,6 +379,7 @@ end subroutine handle_open_read_io
 !===============================================================================
 
 function read_world(filename, permissive) result(w)
+
 	use json_module
 
 	character(len = *), intent(in) :: filename
@@ -397,6 +398,7 @@ function read_world(filename, permissive) result(w)
 	integer(json_IK) :: count_, count_gc, ic, igc
 
 	logical, parameter :: STRICT = .false.  ! STRICT is not permissive
+	logical :: has_geom
 
 	type(json_core) :: json
 	type(json_file) :: file_
@@ -427,7 +429,6 @@ function read_world(filename, permissive) result(w)
 
 	select case (key)
 	case ("world")
-		!pw = p
 		pw => p
 
 	case default
@@ -435,7 +436,6 @@ function read_world(filename, permissive) result(w)
 
 	end select
 	end do
-	!call json%get_child(proot, pw)
 
 	! Set world defaults
 	w%grav_accel = 0.d0
@@ -484,7 +484,7 @@ function read_world(filename, permissive) result(w)
 			w%bodies(ib)%vel = 0.d0
 			w%bodies(ib)%ang_vel = 0.d0
 			w%bodies(ib)%matl = 1
-			!w%bodies(ib)%geom  ! TODO: check has_geom for each body
+			has_geom = .false.
 			ang = 0.d0
 
 			call json%get_child(p, ib, pc)
@@ -501,6 +501,7 @@ function read_world(filename, permissive) result(w)
 
 				select case (key)
 				case ("geom")
+					has_geom = .true.
 					call json%get(pgc, "@", geom_name)
 					w%bodies(ib)%geom = read_geom(geom_name)
 
@@ -531,6 +532,10 @@ function read_world(filename, permissive) result(w)
 				end select
 
 			end do
+
+			if (.not. has_geom) then
+				call panic("body "//to_str(ib)//" does not have a ""geom"" defined")
+			end if
 
 			! Convert from degrees to radians, and then to rotation matrix
 			w%bodies(ib)%rot = get_rot(PI / 180.d0 * ang)
