@@ -776,7 +776,10 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	! Buffer the lines with a 1% extension but *not* the triangles.  This makes
 	! the collision detection a little more robust against body a-to-b vs body
 	! b-to-a order problem, e.g. for "inputs/space-cubes.ribbit".
+
 	line_tol = 0.01d0
+	!line_tol = 0.001d0
+
 	if (t < -line_tol .or. t > 1.d0 + line_tol) then
 		stat = -1
 		return
@@ -792,9 +795,23 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 		return
 	end if
 
-	p = e + t * ef
+	p = e + clamp01(t) * ef
 
 end subroutine tri_line
+
+!===============================================================================
+
+double precision function clamp01(x)
+	double precision, intent(in) :: x
+	clamp01 = clamp(x, 0.d0, 1.d0)
+end function clamp01
+
+!===============================================================================
+
+double precision function clamp(x, min_, max_)
+	double precision, intent(in) :: x, min_, max_
+	clamp = max(min(x, max_), min_)
+end function clamp
 
 !===============================================================================
 
@@ -1052,8 +1069,7 @@ subroutine collide_bodies(w, a, b)
 		r(ND), r1(ND), r2(ND), nrm(ND), vp1(ND), vp2(ND), vr(ND), m1, m2, &
 		i1(ND,ND), i2(ND,ND), fe1(ND), fe2(ND), tng(ND), i1_r1_nrm(ND), &
 		i1_r1_tng(ND), i2_r2_nrm(ND), i2_r2_tng(ND), e, jr_mag, jf_mag, &
-		friction_dyn, jf_max, va0(ND), vb0(ND), pa0(ND), pb0(ND), &
-		rota0(ND,ND), rotb0(ND,ND), nrm_(ND)
+		friction_dyn, jf_max, nrm_(ND)
 	double precision :: rhs(ND,2)
 	double precision, allocatable :: tmp(:,:)
 
@@ -1219,8 +1235,8 @@ subroutine collide_bodies(w, a, b)
 	! Normal impulse magnitude.  Ref: https://en.wikipedia.org/wiki/Collision_response
 	jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
 		(1.d0 / m1 + 1.d0 / m2 + &
-		dot_product(nrm, cross(i1_r1_nrm, r1)) + &
-		dot_product(nrm, cross(i2_r2_nrm, r2))) ! TODO: factor out dot nrm term like wikipedia
+		dot_product(nrm, cross(i1_r1_nrm, r1) + &
+		                 cross(i2_r2_nrm, r2)))
 	!print *, "jr_mag = ", jr_mag
 
 	! TODO: if the `e` fudge factor is changed, make sure to change the
@@ -1229,8 +1245,8 @@ subroutine collide_bodies(w, a, b)
 	!jf_mag = -(1.d0 + e) * dot_product(vr, tng) / &
 	!jf_mag = -dot_product(vr, tng) / &
 		(1.d0 / m1 +  + 1.d0 / m2 + &
-		dot_product(tng, cross(i1_r1_tng, r1)) + &
-		dot_product(tng, cross(i2_r2_tng, r2)))
+		dot_product(tng, cross(i1_r1_tng, r1) + &
+		                 cross(i2_r2_tng, r2)))
 
 	friction_dyn = 0.5d0 * ( &
 		w%matls(a%matl)%friction_dyn + &
@@ -1244,39 +1260,23 @@ subroutine collide_bodies(w, a, b)
 
 	!********
 
-	! TODO: avoid these temp vars
-	va0   = a%vel
-	vb0   = b%vel
-	pa0   = a%pos0  ! Previous states
-	rota0 = a%rot0
-	pb0   = b%pos0
-	rotb0 = b%rot0
-
-	!********
-
-	a%vel = va0 - jr_mag * nrm / m1 - jf_mag * tng / m1
+	a%vel = a%vel - jr_mag * nrm / m1 - jf_mag * tng / m1
 
 	a%ang_vel = a%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
 
-	!print *, "a%ang_vel", a%ang_vel
-
-	a%pos = pa0
-	a%rot = rota0
+	a%pos = a%pos0
+	a%rot = a%rot0
 	call update_vertices(a)
 
 	!********
 
-	b%vel = vb0 + jr_mag * nrm / m2 + jf_mag * tng / m2
+	b%vel = b%vel + jr_mag * nrm / m2 + jf_mag * tng / m2
 
 	b%ang_vel = b%ang_vel + jr_mag * i2_r2_nrm + jf_mag * i2_r2_tng
 
-	!print *, "b%ang_vel", b%ang_vel
-
-	b%pos = pb0
-	b%rot = rotb0
+	b%pos = b%pos0
+	b%rot = b%rot0
 	call update_vertices(b)
-
-	!print *, ""
 
 end subroutine collide_bodies
 
