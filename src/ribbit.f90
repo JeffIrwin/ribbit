@@ -392,7 +392,8 @@ function read_world(filename, permissive) result(w)
 	character(len = :), allocatable :: geom_name
 	character(kind=json_CK, len = :), allocatable :: key
 
-	double precision :: ang(ND)
+	double precision :: ang(ND), default_coef_rest, default_dens, &
+		default_friction_stat, default_friction_dyn
 
 	integer :: ib, im
 	integer(json_IK) :: count_, count_gc, ic, igc
@@ -436,6 +437,12 @@ function read_world(filename, permissive) result(w)
 
 	end select
 	end do
+
+	! Set defaults for each material
+	default_coef_rest = 0.9d0
+	default_dens      = 1000.d0
+	default_friction_stat = 0.15d0
+	default_friction_dyn  = 0.1d0
 
 	! Set world defaults
 	w%grav_accel = 0.d0
@@ -549,10 +556,10 @@ function read_world(filename, permissive) result(w)
 		do im = 1, count_
 
 			! Set defaults for each material
-			w%matls(im)%coef_rest = 0.9d0
-			w%matls(im)%dens      = 1000.d0
-			w%matls(im)%friction_stat = 0.15d0
-			w%matls(im)%friction_dyn  = 0.1d0
+			w%matls(im)%coef_rest     = default_coef_rest
+			w%matls(im)%dens          = default_dens
+			w%matls(im)%friction_stat = default_friction_stat
+			w%matls(im)%friction_dyn  = default_friction_dyn
 
 			call json%get_child(p, im, pc)
 
@@ -600,19 +607,27 @@ function read_world(filename, permissive) result(w)
 
 	end if
 
+	if (.not. allocated(w%matls)) then
+		allocate(w%matls(1))
+		w%matls(1)%coef_rest     = default_coef_rest
+		w%matls(1)%dens          = default_dens
+		w%matls(1)%friction_stat = default_friction_stat
+		w%matls(1)%friction_dyn  = default_friction_dyn
+	end if
+
 end function read_world
 
 !===============================================================================
 
 subroutine init_world(w)
 
+	! Consider inlining this at the end of read_world()
+
 	type(world_t), intent(inout) :: w
 
 	!********
 
 	integer :: ib
-
-	! TODO: define 1 matl prop if not otherwise defined
 
 	do ib = 1, size(w%bodies)
 		call get_inertia(w%bodies(ib), w)
