@@ -705,6 +705,7 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	double precision :: u(ND), v(ND), ef(ND), params(4)
 	double precision :: mat(ND, ND), rhs(ND, 1)
 	double precision, allocatable :: lhs(:,:)
+	double precision :: line_tol
 
 	integer :: i, io
 
@@ -771,12 +772,22 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	! Skip p coordinate calculation if intersection is invalid.  Could return
 	! different status codes if virtual intersection is outside of line segment
 	! vs outside of triangle
-	if (any(params < 0)) then
+
+	! Buffer the lines with a 1% extension but *not* the triangles.  This makes
+	! the collision detection a little more robust against body a-to-b vs body
+	! b-to-a order problem, e.g. for "inputs/space-cubes.ribbit".
+	line_tol = 0.01d0
+	if (t < -line_tol .or. t > 1.d0 + line_tol) then
 		stat = -1
 		return
 	end if
 
-	if (any(params > 1)) then
+	if (any(params(2:4) < 0)) then
+		stat = -1
+		return
+	end if
+
+	if (any(params(2:4) > 1)) then
 		stat = -1
 		return
 	end if
@@ -1018,6 +1029,7 @@ subroutine update_body(w, b, ib)
 	!do ia = ib + 1, size(w%bodies)
 		if (ia == ib) cycle
 		call collide_bodies(w, w%bodies(ia), w%bodies(ib))
+		!call collide_bodies(w, w%bodies(ib), w%bodies(ia))
 	end do
 
 end subroutine update_body
@@ -1091,7 +1103,6 @@ subroutine collide_bodies(w, a, b)
 
 			if (stat == 0) then
 				print *, "collision detected"
-
 				print *, "p = ", p
 
 				nr = nr + 1
@@ -1146,7 +1157,9 @@ subroutine collide_bodies(w, a, b)
 	i1 = matmul(matmul(a%rot, a%inertia), transpose(a%rot))
 	i2 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
 
-	! Sum of external forces acting on body
+	! Sum of external forces acting on body.  TODO: dry up this calculation when
+	! more forces are added (e.g. inter-body gravity).  It's already calculated
+	! in update_body()
 	fe1 = m1 * w%grav_accel
 	fe2 = m2 * w%grav_accel
 	!print *, "fe = ", fe
@@ -1230,14 +1243,12 @@ subroutine collide_bodies(w, a, b)
 	!print *, "jf_mag = ", jf_mag
 
 	!********
+
+	! TODO: avoid these temp vars
 	va0   = a%vel
 	vb0   = b%vel
-
-	! Previous states
-
-	pa0   = a%pos0
+	pa0   = a%pos0  ! Previous states
 	rota0 = a%rot0
-
 	pb0   = b%pos0
 	rotb0 = b%rot0
 
