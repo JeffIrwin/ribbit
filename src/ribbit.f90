@@ -987,9 +987,16 @@ subroutine update_body(w, b, ib)
 
 	!********
 	! Update due to collisions between bodies
+	!
+	! TODO: it might be better to inline this (double) loop and collide_bodies()
+	! bodies call directly inside of ribbit_run(), then world `w` can be
+	! intent(in) in this subroutine
 
 	print *, "w%it = ", w%it
+
 	do ia = 1, size(w%bodies)
+	!do ia = 1, ib - 1
+	!do ia = ib + 1, size(w%bodies)
 		if (ia == ib) cycle
 		call collide_bodies(w, w%bodies(ia), w%bodies(ib))
 	end do
@@ -1015,7 +1022,7 @@ subroutine collide_bodies(w, a, b)
 		i1(ND,ND), i2(ND,ND), fe1(ND), fe2(ND), tng(ND), i1_r1_nrm(ND), &
 		i1_r1_tng(ND), i2_r2_nrm(ND), i2_r2_tng(ND), e, jr_mag, jf_mag, &
 		friction_dyn, jf_max, va0(ND), vb0(ND), pa0(ND), pb0(ND), &
-		rota0(ND,ND), rotb0(ND,ND)
+		rota0(ND,ND), rotb0(ND,ND), nrm_(ND)
 	double precision :: rhs(ND,2)
 	double precision, allocatable :: tmp(:,:)
 
@@ -1029,13 +1036,13 @@ subroutine collide_bodies(w, a, b)
 	! TODO: return early if bbox check passes.  Need to set and cache bbox first
 	! (in update_vertices()?)
 
-	! Iterate through each triangle of body `a` and get the average position `r` and
+	! Iterate through each edge of body `a` and get the average position `r` and
 	! normal `nrm` of the collision point in the global coordinate system
 	r   = 0.d0
 	nrm = 0.d0
-	nr = 0
+	nr  = 0
 	do ita = 1, a%geom%nt
-	do ie  = 1, NT  ! edge loop
+	do ie  = 1, NT
 
 		iva1 = a%geom%t(    ie       , ita)
 		iva2 = a%geom%t(mod(ie,3) + 1, ita)
@@ -1073,7 +1080,10 @@ subroutine collide_bodies(w, a, b)
 				r = r + p
 
 				! Normal vector is outward from body `b` (inward to body `a`)
-				nrm = nrm + normalize(cross(vb2 - vb1, vb3 - vb1))
+				nrm_ = normalize(cross(vb2 - vb1, vb3 - vb1))
+				nrm  = nrm + nrm_
+
+				print *, "nrm_ = ", nrm_
 
 			end if
 
@@ -1086,8 +1096,8 @@ subroutine collide_bodies(w, a, b)
 
 	r = r / nr
 
-	nrm = nrm / nr
-	!call normalize_s(nrm)
+	!nrm = nrm / nr
+	call normalize_s(nrm)
 
 	print *, "r = ", r
 	print *, "nrm = ", nrm
@@ -1107,13 +1117,9 @@ subroutine collide_bodies(w, a, b)
 	! center of mass)
 	vp1 = a%vel + cross(a%ang_vel, r1)
 	vp2 = b%vel + cross(b%ang_vel, r2)
-	!vp1 = v0 + cross(a%ang_vel, r1)
 
 	! Relative velocity
 	vr = vp2 - vp1
-
-	!! Already calculated above
-	!nrm = -w%ground_nrm
 
 	! Mass and inertia *in world frame of reference*
 	m1 = a%mass
@@ -1184,8 +1190,6 @@ subroutine collide_bodies(w, a, b)
 		dot_product(nrm, cross(i1_r1_nrm, r1)) + &
 		dot_product(nrm, cross(i2_r2_nrm, r2))) ! TODO: factor out dot nrm term like wikipedia
 	!print *, "jr_mag = ", jr_mag
-
-	! Ref:  https://gafferongames.com/post/collision_response_and_coulomb_friction/
 
 	! TODO: if the `e` fudge factor is changed, make sure to change the
 	! body-to-ground case too
@@ -1409,7 +1413,8 @@ function normalize(v) result(u)
 	if (norm > 1.d-12) then
 		u = v / norm
 	else
-		u = 0
+		allocate(u( size(v) ))
+		u = 0.d0
 	endif
 end function normalize
 

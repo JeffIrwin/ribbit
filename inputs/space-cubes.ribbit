@@ -1,0 +1,36 @@
+{
+	"world":
+	{
+		#"grav_accel": [0, 0, -9.807],  # m/s^2
+		"t_start": 0,
+		"t_end"  : 15.0, # s
+		"dt": 0.01,
+		"ground_nrm": [0, 0, 1],
+		"bodies":
+		[
+			{
+				"geom": "inputs/cube.obj",
+				"pos": [0, 0, 3],
+				"vel": [1, 0, 0],
+				"ang": [0, 45, 35.26438968275465],
+				"ang_vel": [0, 0, 0],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/cube.obj",
+				"pos": [3.5, 0, 3],
+				"vel": [-2, 0, 0],
+				"ang": [0, 0, 0],
+				"ang_vel": [0, 0, 0],
+				"matl": 1
+			}
+		],
+		"matls":
+		[
+			{
+				"coef_rest": 0.74,
+				"dens": 2500.0 # kg/m^3
+			}
+		]
+	}
+}

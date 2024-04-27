@@ -1,0 +1,35 @@
+{
+	"world":
+	{
+		#"grav_accel": [0, 0, -9.807],  # m/s^2
+		"t_start": 0,
+		"t_end"  : 15.0, # s
+		"dt": 0.01,
+		"ground_nrm": [0, 0, 1],
+		"ground_pos": [0, 0, -1000],
+		"bodies":
+		[
+			{
+				"geom": "inputs/tet2.obj",
+				"pos": [0, 0,  3],
+				"ang": [0, 0, 0],
+				"vel": [0, 0, -2],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/tet2.obj",
+				"pos": [0.8, 0, 0],
+				"ang": [0, 0, 0],
+				"vel": [0, 0, 1],
+				"matl": 1
+			}
+		],
+		"matls":
+		[
+			{
+				"coef_rest": 0.74,
+				"dens": 2500.0 # kg/m^3
+			}
+		]
+	}
+}
