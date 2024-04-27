@@ -1014,7 +1014,7 @@ subroutine update_body(w, b, ib)
 
 		! Apply friction cone clamp.  TODO: when should this be static friction?
 		jf_max = w%matls(b%matl)%friction_dyn * abs(jr_mag)
-		jf_mag = max(min(jf_mag, jf_max), -jf_max)
+		jf_mag = clamp(jf_mag, -jf_max, jf_max)
 		!print *, "jf_mag = ", jf_mag
 
 		b%vel = v0 - jr_mag * nrm / m1 - jf_mag * tng / m1
@@ -1255,7 +1255,7 @@ subroutine collide_bodies(w, a, b)
 
 	! Apply friction cone clamp.  TODO: when should this be static friction?
 	jf_max = friction_dyn * abs(jr_mag)
-	jf_mag = max(min(jf_mag, jf_max), -jf_max)
+	jf_mag = clamp(jf_mag, -jf_max, jf_max)
 	!print *, "jf_mag = ", jf_mag
 
 	!********
