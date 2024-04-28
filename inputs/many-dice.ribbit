@@ -4,7 +4,7 @@
 		"grav_accel": [0, 0, -9.807],  # m/s^2
 		"t_start": 0,
 		"t_end"  : 5.0, # s
-		"dt": 0.0005,
+		"dt": 0.0015,
 		"ground_nrm": [0, 0.05, 0.9],
 		"bodies":
 		[

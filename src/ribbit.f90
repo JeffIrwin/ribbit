@@ -951,6 +951,9 @@ end subroutine apply_grav
 
 subroutine collide_ground(w, b)
 
+	! Update body `b` due to collision with the global ground, which is like a
+	! special symbolic body with infinite inertia and extents
+
 	type(world_t), intent(in) :: w
 	type(body_t), intent(inout) :: b
 
@@ -967,119 +970,109 @@ subroutine collide_ground(w, b)
 
 	integer :: i, ncolliding, ia
 
-	logical :: colliding
-
-	!********
-	! Update due to collision with the global ground, which is like a special
-	! symbolic body with infinite inertia and extents
+	if (.not. w%has_ground) return
 
 	! In case of collision along an entire face or edge, get the centroid of
 	! that face/edge instead of just one vertex, by taking the average of all
 	! colliding vertices
-	colliding = .false.
 	ncolliding = 0
 	r1 = 0.d0
 	do i = 1, b%geom%nv
-		! TODO: change `has_ground` check into an early return after refactoring
-		if (w%has_ground .and. dot_product(w%ground_nrm, b%geom%v(:,i) - w%ground_pos) <= 0) then
-			colliding = .true.
+		if (dot_product(w%ground_nrm, b%geom%v(:,i) - w%ground_pos) <= 0) then
 			ncolliding = ncolliding + 1
 			r1 = r1 + b%geom%v(:,i) - b%pos
 		end if
 	end do
+	if (ncolliding == 0) return
 	r1 = r1 / ncolliding
 
-	! TODO: early return
-	if (colliding) then
-		!print *, "ncolliding = ", ncolliding
+	!print *, "ncolliding = ", ncolliding
 
-		! Collide body (body 1) with ground (body 2).  The ground has
-		! infinite mass and inertia, so many terms become zero
+	! Collide body (body 1) with ground (body 2).  The ground has
+	! infinite mass and inertia, so many terms become zero
 
-		! Velocities of each bodies' points *at point of contact* (not
-		! center of mass)
-		vp2 = 0
-		vp1 = b%vel + cross(b%ang_vel, r1)
+	! Velocities of each bodies' points *at point of contact* (not
+	! center of mass)
+	vp2 = 0
+	vp1 = b%vel + cross(b%ang_vel, r1)
 
-		! Relative velocity
-		vr = vp2 - vp1
+	! Relative velocity
+	vr = vp2 - vp1
 
-		! Normal vector of collision plane.  I think this minus sign
-		! doesn't make a difference
-		nrm = -w%ground_nrm
+	! Normal vector of collision plane.  I think this minus sign
+	! doesn't make a difference
+	nrm = -w%ground_nrm
 
-		! Mass and inertia *in world frame of reference*
-		m1 = b%mass
-		i1 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
+	! Mass and inertia *in world frame of reference*
+	m1 = b%mass
+	i1 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
 
-		! Sum of external forces acting on body
-		fe = m1 * w%grav_accel
-		!print *, "fe = ", fe
+	! Sum of external forces acting on body
+	fe = m1 * w%grav_accel
+	!print *, "fe = ", fe
 
-		! Tangent vector
-		if (abs(dot_product(normalize(vr), nrm)) > tol) then
-			tng = vr - dot_product(vr, nrm) * nrm
-			call normalize_s(tng)
-		else if (abs(dot_product(normalize(fe), nrm)) > tol) then
-			tng = fe - dot_product(fe, nrm) * nrm
-			call normalize_s(tng)
-		else
-			tng = 0
-		end if
-		!tng = -tng
-		!print *, "tng = ", tng
-
-		! Pack data into a matrix for lapack
-		rhs(:,1) = cross(r1, nrm)
-		rhs(:,2) = cross(r1, tng)
-
-		tmp = invmul(i1, rhs)
-
-		! Unpack
-		i1_r1_nrm = tmp(:,1)
-		i1_r1_tng = tmp(:,2)
-
-		! Coefficient of restitution
-		e = w%matls(b%matl)%coef_rest
-
-		! Normal impulse magnitude.  Ref: https://en.wikipedia.org/wiki/Collision_response
-		jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
-			(1.d0/m1 + dot_product(nrm, cross(i1_r1_nrm, r1)))
-		!print *, "jr_mag = ", jr_mag
-
-		! Ref:  https://gafferongames.com/post/collision_response_and_coulomb_friction/
-
-		!jf_mag = -e * dot_product(vr, tng) / &
-		!jf_mag = -(1.d0 + e) * dot_product(vr, tng) / &
-		jf_mag = -dot_product(vr, tng) / &
-			(1.d0/m1 + dot_product(tng, cross(i1_r1_tng, r1)))
-
-		! Apply friction cone clamp.  TODO: when should this be static friction?
-		jf_max = w%matls(b%matl)%friction_dyn * abs(jr_mag)
-		jf_mag = clamp(jf_mag, -jf_max, jf_max)
-		!print *, "jf_mag = ", jf_mag
-
-		! Lerp velocity to add a little damping
-		#define LERP 0.98d0
-		!b%vel = 0.5d0 * (b%vel0 + b%vel) - jr_mag * nrm / m1 - jf_mag * tng / m1
-		b%vel = LERP * b%vel + (1.d0 - LERP) * b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
-		!b%vel = b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
-		!b%vel = b%vel - jr_mag * nrm / m1 - jf_mag * tng / m1
-
-		b%ang_vel = b%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
-
-		!print *, "b%ang_vel", b%ang_vel
-
-		#define LERP 0.5d0
-		!b%pos = b%pos0
-		!b%rot = b%rot0
-		b%pos = LERP * b%pos + (1.d0 - LERP) * b%pos0
-		b%rot = LERP * b%rot + (1.d0 - LERP) * b%rot0
-		call update_vertices(b)
-
-		!print *, ""
-
+	! Tangent vector
+	if (abs(dot_product(normalize(vr), nrm)) > tol) then
+		tng = vr - dot_product(vr, nrm) * nrm
+		call normalize_s(tng)
+	else if (abs(dot_product(normalize(fe), nrm)) > tol) then
+		tng = fe - dot_product(fe, nrm) * nrm
+		call normalize_s(tng)
+	else
+		tng = 0
 	end if
+	!tng = -tng
+	!print *, "tng = ", tng
+
+	! Pack data into a matrix for lapack
+	rhs(:,1) = cross(r1, nrm)
+	rhs(:,2) = cross(r1, tng)
+
+	tmp = invmul(i1, rhs)
+
+	! Unpack
+	i1_r1_nrm = tmp(:,1)
+	i1_r1_tng = tmp(:,2)
+
+	! Coefficient of restitution
+	e = w%matls(b%matl)%coef_rest
+
+	! Normal impulse magnitude.  Ref: https://en.wikipedia.org/wiki/Collision_response
+	jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
+		(1.d0/m1 + dot_product(nrm, cross(i1_r1_nrm, r1)))
+	!print *, "jr_mag = ", jr_mag
+
+	! Ref:  https://gafferongames.com/post/collision_response_and_coulomb_friction/
+
+	!jf_mag = -e * dot_product(vr, tng) / &
+	!jf_mag = -(1.d0 + e) * dot_product(vr, tng) / &
+	jf_mag = -dot_product(vr, tng) / &
+		(1.d0/m1 + dot_product(tng, cross(i1_r1_tng, r1)))
+
+	! Apply friction cone clamp.  TODO: when should this be static friction?
+	jf_max = w%matls(b%matl)%friction_dyn * abs(jr_mag)
+	jf_mag = clamp(jf_mag, -jf_max, jf_max)
+	!print *, "jf_mag = ", jf_mag
+
+	! Lerp velocity to add a little damping
+	#define LERP 1.00d0
+	!b%vel = 0.5d0 * (b%vel0 + b%vel) - jr_mag * nrm / m1 - jf_mag * tng / m1
+	b%vel = LERP * b%vel + (1.d0 - LERP) * b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
+	!b%vel = b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
+	!b%vel = b%vel - jr_mag * nrm / m1 - jf_mag * tng / m1
+
+	b%ang_vel = b%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
+
+	!print *, "b%ang_vel", b%ang_vel
+
+	! Pose lerp helps bodies damp and settle instead of making small bounces
+	! forever
+	#define LERP 0.5d0
+	b%pos = LERP * b%pos + (1.d0 - LERP) * b%pos0
+	b%rot = LERP * b%rot + (1.d0 - LERP) * b%rot0
+	call update_vertices(b)
+
+	!print *, ""
 
 end subroutine collide_ground
 
@@ -1095,7 +1088,7 @@ subroutine collide_bodies(w, a, b)
 
 	!********
 
-	double precision, parameter :: tol = 0.001  ! coincident vector angle-ish tol
+	double precision, parameter :: tol = 0.001d0  ! coincident vector angle-ish tol
 
 	double precision :: va1(ND), va2(ND), vb1(ND), vb2(ND), vb3(ND), p(ND), &
 		r(ND), r1(ND), r2(ND), nrm(ND), vp1(ND), vp2(ND), vr(ND), m1, m2, &
@@ -1199,6 +1192,10 @@ subroutine collide_bodies(w, a, b)
 	! Relative velocity
 	vr = vp2 - vp1
 
+	! If the bodies are already moving away from each other, stop!  Collision
+	! response was probably just calculated already in the last time step
+	if (dot_product(vr, nrm) < 0) return
+
 	! Mass and inertia *in world frame of reference*
 	m1 = a%mass
 	m2 = b%mass
@@ -1292,35 +1289,23 @@ subroutine collide_bodies(w, a, b)
 
 	!********
 
-	! TODO: avg vel damping like in ground collisions?
 	a%vel = a%vel - jr_mag * nrm / m1 - jf_mag * tng / m1
-	!a%vel = 0.5d0 * (a%vel0 + a%vel) - jr_mag * nrm / m1 - jf_mag * tng / m1
 
 	a%ang_vel = a%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
 
-	#define LERP 0.1d0
+	! TODO: remove LERP if 1 is ok
+	#define LERP 1.0d0
 
-	!! Lerping positions seems to reduce chances of glitching into a stuck
-	!! state
-	!a%pos = a%pos0
-	!a%rot = a%rot0
-	!a%pos = 0.5d0 * (a%pos + a%pos0)
-	!a%rot = 0.5d0 * (a%rot + a%rot0)
 	a%pos = LERP * a%pos + (1.d0 - LERP) * a%pos0
-	a%rot = LERP * a%rot + (1.d0 - LERP) * a%rot0
+	a%rot = LERP * a%rot + (1.d0 - LERP) * a%rot0  ! TODO: gram_schmidt()?
 	call update_vertices(a)
 
 	!********
 
 	b%vel = b%vel + jr_mag * nrm / m2 + jf_mag * tng / m2
-	!b%vel = 0.5d0 * (b%vel0 + b%vel) + jr_mag * nrm / m2 + jf_mag * tng / m2
 
 	b%ang_vel = b%ang_vel + jr_mag * i2_r2_nrm + jf_mag * i2_r2_tng
 
-	!b%pos = b%pos0
-	!b%rot = b%rot0
-	!b%pos = 0.5d0 * (b%pos + b%pos0)
-	!b%rot = 0.5d0 * (b%rot + b%rot0)
 	b%pos = LERP * b%pos + (1.d0 - LERP) * b%pos0
 	b%rot = LERP * b%rot + (1.d0 - LERP) * b%rot0
 	call update_vertices(b)
