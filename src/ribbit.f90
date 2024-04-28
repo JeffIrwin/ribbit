@@ -52,8 +52,8 @@ module ribbit
 		double precision :: vol, mass
 		double precision :: inertia(ND, ND)
 
-		! previous pose
-		double precision :: pos0(ND), rot0(ND, ND)
+		! previous state
+		double precision :: pos0(ND), vel0(ND), rot0(ND, ND)
 
 	end type body_t
 
@@ -860,12 +860,16 @@ subroutine ribbit_run(w)
 		end do
 
 		do ib = 1, size(w%bodies)
-			call update_body(w, w%bodies(ib), ib)
+			call apply_grav(w, w%bodies(ib))
+		end do
+
+		do ib = 1, size(w%bodies)
+			call collide_ground(w, w%bodies(ib), ib)
 		end do
 
 		call write_step(w)
 		w%it = w%it + 1
-		w%t = w%t + w%dt
+		w%t  = w%t  + w%dt
 	end do
 	call write_case(w)
 
@@ -877,30 +881,30 @@ end subroutine ribbit_run
 !===============================================================================
 
 subroutine cache_body(b)
-	! Save initial pose
+	! Save initial state
 	type(body_t), intent(inout) :: b
 
 	b%pos0 = b%pos
 	b%rot0 = b%rot
 
+	b%vel0 = b%vel
+
 end subroutine cache_body
 
 !===============================================================================
 
-subroutine update_body(w, b, ib)
+subroutine apply_grav(w, b)
 
-	! This has side effects on other bodies in the world besides `b` when bodies
-	! collide with each other
+	! Update body `b` due to gravitational acceleration
 
 	type(world_t), intent(inout) :: w
 	type(body_t), intent(inout) :: b
-	integer, intent(in) :: ib  ! don't check for collisions with self
 
 	!********
 
 	double precision, parameter :: tol = 0.001  ! coincident vector angle-ish tol
 
-	double precision :: p0(ND), v0(ND), rot0(ND, ND), i1_r1_nrm(ND), &
+	double precision :: rot0(ND, ND), i1_r1_nrm(ND), &
 		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
 		jr_mag, e, tng(ND), fe(ND), jf_mag, i1_r1_tng(ND), jf_max
 
@@ -911,19 +915,13 @@ subroutine update_body(w, b, ib)
 
 	logical :: colliding
 
-	!********
-	! Update due to gravitational acceleration
+	b%vel = b%vel0 + w%grav_accel * w%dt
 
-	v0 = b%vel
-	b%vel = v0 + w%grav_accel * w%dt
-
-	p0   = b%pos0
-	rot0 = b%rot0
-
-	b%pos = p0 + 0.5 * (v0 + b%vel) * w%dt
+	b%pos = b%pos0 + 0.5 * (b%vel0 + b%vel) * w%dt
 
 	! Update rotations by multiplying by a rotation matrix, not by
-	! adding vec3's!
+	! adding vec3's!  Rotations are not related to gravity, but we have to set
+	! the pose before calling expensive update_vertices()
 	b%rot = matmul(get_rot(b%ang_vel * w%dt), b%rot)
 
 	! Rounding errors might accumulate after many time steps.
@@ -931,6 +929,34 @@ subroutine update_body(w, b, ib)
 	call gram_schmidt(b%rot)
 
 	call update_vertices(b)
+
+end subroutine apply_grav
+
+!===============================================================================
+
+subroutine collide_ground(w, b, ib)
+
+	! This has side effects on other bodies in the world besides `b` when bodies
+	! collide with each other. TODO: < it won't after refactoring
+
+	type(world_t), intent(inout) :: w
+	type(body_t), intent(inout) :: b
+	integer, intent(in) :: ib  ! don't check for collisions with self
+
+	!********
+
+	double precision, parameter :: tol = 0.001  ! coincident vector angle-ish tol
+
+	double precision :: i1_r1_nrm(ND), &
+		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
+		jr_mag, e, tng(ND), fe(ND), jf_mag, i1_r1_tng(ND), jf_max
+
+	double precision :: rhs(ND,2)
+	double precision, allocatable :: tmp(:,:)
+
+	integer :: i, ncolliding, ia
+
+	logical :: colliding
 
 	!********
 	! Update due to collision with the global ground, which is like a special
@@ -1021,15 +1047,14 @@ subroutine update_body(w, b, ib)
 		jf_mag = clamp(jf_mag, -jf_max, jf_max)
 		!print *, "jf_mag = ", jf_mag
 
-		b%vel = v0 - jr_mag * nrm / m1 - jf_mag * tng / m1
+		b%vel = b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
 
 		b%ang_vel = b%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
 
 		!print *, "b%ang_vel", b%ang_vel
 
-		b%pos = p0
-		b%rot = rot0
-
+		b%pos = b%pos0
+		b%rot = b%rot0
 		call update_vertices(b)
 
 		!print *, ""
@@ -1053,7 +1078,7 @@ subroutine update_body(w, b, ib)
 		!call collide_bodies(w, w%bodies(ib), w%bodies(ia))
 	end do
 
-end subroutine update_body
+end subroutine collide_ground
 
 !===============================================================================
 
