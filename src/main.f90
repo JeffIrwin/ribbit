@@ -11,6 +11,7 @@ module ribbit_app
 			ribbit_file_arg = .false., &
 			permissive      = .false., &
 			version         = .false., &
+			dump_csv        = .false., &
 			help            = .false.
 
 	end type args_t
@@ -89,6 +90,10 @@ function read_args() result(args)
 		call get_next_arg(i, argv)
 
 		select case (argv)
+
+		case ("-d", "--dump-csv")
+			args%dump_csv = .true.
+
 		case ("-h", "--help", "-help")
 			args%help    = .true.
 
@@ -152,14 +157,15 @@ function read_args() result(args)
 	if (error .or. args%help) then
 
 		write(*,*) fg_bold//"Usage:"//color_reset
-		write(*,*) "	ribbit <file.ribbit> [-p]"
+		write(*,*) "	ribbit <file.ribbit> [-d] [-p]"
 		write(*,*) "	ribbit -h | --help"
 		write(*,*) "	ribbit --version"
 		write(*,*)
 		write(*,*) fg_bold//"Options:"//color_reset
-		write(*,*) "	-h --help           Show this help"
-		write(*,*) "	--version           Show version"
-		write(*,*) "	-p --permissive     Use loose json schema rules"
+		write(*,*) "	-d --dump-csv    Export CSV file with summary data"
+		write(*,*) "	-h --help        Show this help"
+		write(*,*) "	-p --permissive  Use loose json schema rules"
+		write(*,*) "	--version        Show version"
 		write(*,*)
 
 		if (.not. args%help) call ribbit_exit(EXIT_FAILURE)
@@ -199,7 +205,7 @@ program main
 	world = read_world(args%ribbit_file, args%permissive)
 	call init_world(world)
 
-	call ribbit_run(world)
+	call ribbit_run(world, args%dump_csv)
 	call ribbit_exit(EXIT_SUCCESS)
 
 end program main

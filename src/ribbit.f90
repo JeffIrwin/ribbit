@@ -819,10 +819,11 @@ end function clamp
 
 !===============================================================================
 
-subroutine ribbit_run(w)
+subroutine ribbit_run(w, dump_csv)
 
 	use json_module
 	type(world_t), intent(inout) :: w
+	logical, intent(in) :: dump_csv
 
 	!********
 
@@ -831,12 +832,11 @@ subroutine ribbit_run(w)
 	integer :: ia, ib, io
 	integer :: fid
 
-	logical, parameter :: dump_csv = .false.
-
 	write(*,*) "starting ribbit_run()"
 
 	if (dump_csv) then
-		csv_file = "dump4.csv"
+		! TODO: set filename based on input
+		csv_file = "dump.csv"
 		open(newunit = fid, file = csv_file, action = "write", iostat = io)
 		call handle_open_write_io(csv_file, io)
 	end if
@@ -855,6 +855,8 @@ subroutine ribbit_run(w)
 			write(fid, "(es16.6)", advance = "no") w%t
 			do ib = 1, size(w%bodies)
 				write(fid, "(3es16.6)", advance = "no") w%bodies(ib)%pos
+				write(fid, "(3es16.6)", advance = "no") w%bodies(ib)%vel
+				! could also add rot/ang_vel if there's a need
 			end do
 			write(fid, *)
 		end if

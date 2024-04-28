@@ -3,14 +3,8 @@
 #set -xe
 set -e
 
-#if [[ $# -ge 1 ]] ; then
-#	ribbit_file=$1
-#else
-#	ribbit_file="inputs/cubes.ribbit"
-#fi
-
 # Default arguments
-ribbit_file="inputs/cubes.ribbit"
+ribbit_args=("inputs/cubes.ribbit")
 profile="debug"
 exe="ribbit"
 
@@ -29,20 +23,21 @@ while test $# -gt 0 ; do
 		exe="test"
 
 	elif [[ "$pos" == "0" ]] ; then
-		ribbit_file="$1"
+		ribbit_args[0]="$1"
 		((++pos))
 		#echo "pos = $pos"
 
 	else
-		echo "Error: bad argument \"$1\""
-		exit -1
+		ribbit_args+=("$1")
+
 	fi
 
 	shift
 done
 
 #echo "profile = $profile"
+#echo "ribbit_args = ${ribbit_args[@]}"
 #exit 0
 
-time fpm run "$exe" --compiler ifx --c-compiler gcc --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile $profile -- "$ribbit_file"
+time fpm run "$exe" --compiler ifx --c-compiler gcc --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile $profile -- "${ribbit_args[@]}"
 
