@@ -3,8 +3,8 @@
 	{
 		"grav_accel": [0, 0, -9.807],  # m/s^2
 		"t_start": 0,
-		"t_end"  : 5.0, # s
-		"dt": 0.0015,
+		"t_end"  : 0.8, # s
+		"dt": 0.0005,
 		"ground_nrm": [0, 0.05, 0.9],
 		"bodies":
 		[
@@ -26,22 +26,95 @@
 				"ang_vel": [55, 35, 0],
 				"matl": 1
 			},
-
 			{
 				"geom": "inputs/die.obj",
-				"pos": [-0.032, 0, 0.15],
+				"pos": [-0.032, 0, 0.12],
 				"ang": [0, 0, 30],
 				"matl": 1
 			},
 			{
 				"geom": "inputs/die.obj",
-				"pos": [0.032, 0, 0.15],
+				"pos": [0.032, 0, 0.12],
 				"ang": [-3.1798301198642349, 0, 0],
 				"matl": 1
 			},
 			{
 				"geom": "inputs/die.obj",
-				"pos": [0, 0, 0.15],
+				"pos": [0, 0, 0.12],
+				"ang_vel": [55, 35, 0],
+				"matl": 1
+			},
+
+			{
+				"geom": "inputs/die.obj",
+				"pos": [-0.022, 0.025, 0.1],
+				"ang": [0, 0, 30],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [0.022, 0.025, 0.1],
+				"ang": [-3.1798301198642349, 0, 0],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [0, 0.025, 0.1],
+				"ang_vel": [55, 35, 0],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [-0.032, 0.025, 0.12],
+				"ang": [0, 0, 30],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [0.032, 0.025, 0.12],
+				"ang": [-3.1798301198642349, 0, 0],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [0, 0.025, 0.12],
+				"ang_vel": [55, 35, 0],
+				"matl": 1
+			},
+
+			{
+				"geom": "inputs/die.obj",
+				"pos": [-0.022, 0.050, 0.1],
+				"ang": [0, 0, 30],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [0.022, 0.050, 0.1],
+				"ang": [-3.1798301198642349, 0, 0],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [0, 0.050, 0.1],
+				"ang_vel": [55, 35, 0],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [-0.032, 0.050, 0.12],
+				"ang": [0, 0, 30],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [0.032, 0.050, 0.12],
+				"ang": [-3.1798301198642349, 0, 0],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/die.obj",
+				"pos": [0, 0.050, 0.12],
 				"ang_vel": [55, 35, 0],
 				"matl": 1
 			},
@@ -51,8 +124,8 @@
 		[
 			{
 				"dens": 1500.0, # kg/m^3, cellulose
-				"friction_stat": 0.30,
-				"friction_dyn" : 0.25,
+				"friction_stat": 0.20,
+				"friction_dyn" : 0.15,
 				"coef_rest": 0.6
 			}
 		]

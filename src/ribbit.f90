@@ -999,9 +999,10 @@ subroutine collide_ground(w, b)
 	! Relative velocity
 	vr = vp2 - vp1
 
-	! Normal vector of collision plane.  I think this minus sign
-	! doesn't make a difference
-	nrm = -w%ground_nrm
+	! Normal vector of collision plane
+	nrm = w%ground_nrm
+
+	if (dot_product(vr, nrm) < 0) return
 
 	! Mass and inertia *in world frame of reference*
 	m1 = b%mass
