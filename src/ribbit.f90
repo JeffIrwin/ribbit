@@ -1056,14 +1056,21 @@ subroutine collide_ground(w, b)
 		jf_mag = clamp(jf_mag, -jf_max, jf_max)
 		!print *, "jf_mag = ", jf_mag
 
-		b%vel = b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
+		! Average velocity to add a little damping
+		b%vel = 0.5d0 * (b%vel0 + b%vel) - jr_mag * nrm / m1 - jf_mag * tng / m1
+		!b%vel = b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
 
 		b%ang_vel = b%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
 
 		!print *, "b%ang_vel", b%ang_vel
 
-		b%pos = b%pos0
-		b%rot = b%rot0
+		!b%pos = b%pos0
+		!b%rot = b%rot0
+		b%pos = 0.5d0 * (b%pos + b%pos0)
+		b%rot = 0.5d0 * (b%rot + b%rot0)
+		!b%pos = 0.3d0 * b%pos + 0.7d0 * b%pos0
+		!b%rot = 0.3d0 * b%rot + 0.7d0 * b%rot0
+
 		call update_vertices(b)
 
 		!print *, ""
@@ -1281,22 +1288,31 @@ subroutine collide_bodies(w, a, b)
 
 	!********
 
+	! TODO: avg vel damping like in ground collisions?
 	a%vel = a%vel - jr_mag * nrm / m1 - jf_mag * tng / m1
+	!a%vel = 0.5d0 * (a%vel0 + a%vel) - jr_mag * nrm / m1 - jf_mag * tng / m1
 
 	a%ang_vel = a%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
 
-	a%pos = a%pos0
-	a%rot = a%rot0
+	!! Averaging positions seems to reduce chances of glitching into a stuck
+	!! state
+	!a%pos = a%pos0
+	!a%rot = a%rot0
+	a%pos = 0.5d0 * (a%pos + a%pos0)
+	a%rot = 0.5d0 * (a%rot + a%rot0)
 	call update_vertices(a)
 
 	!********
 
 	b%vel = b%vel + jr_mag * nrm / m2 + jf_mag * tng / m2
+	!b%vel = 0.5d0 * (b%vel0 + b%vel) + jr_mag * nrm / m2 + jf_mag * tng / m2
 
 	b%ang_vel = b%ang_vel + jr_mag * i2_r2_nrm + jf_mag * i2_r2_tng
 
-	b%pos = b%pos0
-	b%rot = b%rot0
+	!b%pos = b%pos0
+	!b%rot = b%rot0
+	b%pos = 0.5d0 * (b%pos + b%pos0)
+	b%rot = 0.5d0 * (b%rot + b%rot0)
 	call update_vertices(b)
 
 end subroutine collide_bodies
