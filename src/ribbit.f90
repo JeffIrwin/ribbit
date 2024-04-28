@@ -828,7 +828,7 @@ subroutine ribbit_run(w)
 
 	character(len = : ), allocatable :: csv_file
 
-	integer :: ib, io
+	integer :: ia, ib, io
 	integer :: fid
 
 	logical, parameter :: dump_csv = .false.
@@ -846,6 +846,7 @@ subroutine ribbit_run(w)
 	do while (w%t <= w%t_end)
 
 		!print *, "t, z = ", w%t, w%bodies(1)%pos(3)
+		!print *, "w%it = ", w%it
 
 		if (dump_csv) then
 			write(fid, "(es16.6)", advance = "no") w%t
@@ -864,7 +865,17 @@ subroutine ribbit_run(w)
 		end do
 
 		do ib = 1, size(w%bodies)
-			call collide_ground(w, w%bodies(ib), ib)
+			call collide_ground(w, w%bodies(ib))
+		end do
+
+		do ib = 1, size(w%bodies)
+			do ia = 1, size(w%bodies)
+			!do ia = 1, ib - 1
+			!do ia = ib + 1, size(w%bodies)
+				if (ia == ib) cycle
+				call collide_bodies(w, w%bodies(ia), w%bodies(ib))
+				!call collide_bodies(w, w%bodies(ib), w%bodies(ia))
+			end do
 		end do
 
 		call write_step(w)
@@ -895,7 +906,8 @@ end subroutine cache_body
 
 subroutine apply_grav(w, b)
 
-	! Update body `b` due to gravitational acceleration
+	! Update body `b` due to gravitational acceleration.  Could be renamed to
+	! something like `apply_forces()` if generalized to other things
 
 	type(world_t), intent(inout) :: w
 	type(body_t), intent(inout) :: b
@@ -934,14 +946,10 @@ end subroutine apply_grav
 
 !===============================================================================
 
-subroutine collide_ground(w, b, ib)
+subroutine collide_ground(w, b)
 
-	! This has side effects on other bodies in the world besides `b` when bodies
-	! collide with each other. TODO: < it won't after refactoring
-
-	type(world_t), intent(inout) :: w
+	type(world_t), intent(in) :: w
 	type(body_t), intent(inout) :: b
-	integer, intent(in) :: ib  ! don't check for collisions with self
 
 	!********
 
@@ -978,6 +986,7 @@ subroutine collide_ground(w, b, ib)
 	end do
 	r1 = r1 / ncolliding
 
+	! TODO: early return
 	if (colliding) then
 		!print *, "ncolliding = ", ncolliding
 
@@ -1060,23 +1069,6 @@ subroutine collide_ground(w, b, ib)
 		!print *, ""
 
 	end if
-
-	!********
-	! Update due to collisions between bodies
-	!
-	! TODO: it might be better to inline this (double) loop and collide_bodies()
-	! bodies call directly inside of ribbit_run(), then world `w` can be
-	! intent(in) in this subroutine
-
-	print *, "w%it = ", w%it
-
-	do ia = 1, size(w%bodies)
-	!do ia = 1, ib - 1
-	!do ia = ib + 1, size(w%bodies)
-		if (ia == ib) cycle
-		call collide_bodies(w, w%bodies(ia), w%bodies(ib))
-		!call collide_bodies(w, w%bodies(ib), w%bodies(ia))
-	end do
 
 end subroutine collide_ground
 
