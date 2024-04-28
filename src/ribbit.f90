@@ -841,6 +841,9 @@ subroutine ribbit_run(w)
 		call handle_open_write_io(csv_file, io)
 	end if
 
+	! TODO: run an initial check to see if bodies are already colliding
+	! initially.  Panic?
+
 	w%t = w%t_start
 	w%it = 0
 	do while (w%t <= w%t_end)
@@ -1046,9 +1049,9 @@ subroutine collide_ground(w, b)
 
 		! Ref:  https://gafferongames.com/post/collision_response_and_coulomb_friction/
 
-		jf_mag = -e * dot_product(vr, tng) / &
+		!jf_mag = -e * dot_product(vr, tng) / &
 		!jf_mag = -(1.d0 + e) * dot_product(vr, tng) / &
-		!jf_mag = -dot_product(vr, tng) / &
+		jf_mag = -dot_product(vr, tng) / &
 			(1.d0/m1 + dot_product(tng, cross(i1_r1_tng, r1)))
 
 		! Apply friction cone clamp.  TODO: when should this be static friction?
@@ -1056,21 +1059,22 @@ subroutine collide_ground(w, b)
 		jf_mag = clamp(jf_mag, -jf_max, jf_max)
 		!print *, "jf_mag = ", jf_mag
 
-		! Average velocity to add a little damping
-		b%vel = 0.5d0 * (b%vel0 + b%vel) - jr_mag * nrm / m1 - jf_mag * tng / m1
+		! Lerp velocity to add a little damping
+		#define LERP 0.98d0
+		!b%vel = 0.5d0 * (b%vel0 + b%vel) - jr_mag * nrm / m1 - jf_mag * tng / m1
+		b%vel = LERP * b%vel + (1.d0 - LERP) * b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
 		!b%vel = b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
+		!b%vel = b%vel - jr_mag * nrm / m1 - jf_mag * tng / m1
 
 		b%ang_vel = b%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
 
 		!print *, "b%ang_vel", b%ang_vel
 
+		#define LERP 0.5d0
 		!b%pos = b%pos0
 		!b%rot = b%rot0
-		b%pos = 0.5d0 * (b%pos + b%pos0)
-		b%rot = 0.5d0 * (b%rot + b%rot0)
-		!b%pos = 0.3d0 * b%pos + 0.7d0 * b%pos0
-		!b%rot = 0.3d0 * b%rot + 0.7d0 * b%rot0
-
+		b%pos = LERP * b%pos + (1.d0 - LERP) * b%pos0
+		b%rot = LERP * b%rot + (1.d0 - LERP) * b%rot0
 		call update_vertices(b)
 
 		!print *, ""
@@ -1269,9 +1273,9 @@ subroutine collide_bodies(w, a, b)
 
 	! TODO: if the `e` fudge factor is changed, make sure to change the
 	! body-to-ground case too
-	jf_mag = -e * dot_product(vr, tng) / &
+	!jf_mag = -e * dot_product(vr, tng) / &
 	!jf_mag = -(1.d0 + e) * dot_product(vr, tng) / &
-	!jf_mag = -dot_product(vr, tng) / &
+	jf_mag = -dot_product(vr, tng) / &
 		(1.d0 / m1 +  + 1.d0 / m2 + &
 		dot_product(tng, cross(i1_r1_tng, r1) + &
 		                 cross(i2_r2_tng, r2)))
@@ -1294,12 +1298,16 @@ subroutine collide_bodies(w, a, b)
 
 	a%ang_vel = a%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
 
-	!! Averaging positions seems to reduce chances of glitching into a stuck
+	#define LERP 0.1d0
+
+	!! Lerping positions seems to reduce chances of glitching into a stuck
 	!! state
 	!a%pos = a%pos0
 	!a%rot = a%rot0
-	a%pos = 0.5d0 * (a%pos + a%pos0)
-	a%rot = 0.5d0 * (a%rot + a%rot0)
+	!a%pos = 0.5d0 * (a%pos + a%pos0)
+	!a%rot = 0.5d0 * (a%rot + a%rot0)
+	a%pos = LERP * a%pos + (1.d0 - LERP) * a%pos0
+	a%rot = LERP * a%rot + (1.d0 - LERP) * a%rot0
 	call update_vertices(a)
 
 	!********
@@ -1311,8 +1319,10 @@ subroutine collide_bodies(w, a, b)
 
 	!b%pos = b%pos0
 	!b%rot = b%rot0
-	b%pos = 0.5d0 * (b%pos + b%pos0)
-	b%rot = 0.5d0 * (b%rot + b%rot0)
+	!b%pos = 0.5d0 * (b%pos + b%pos0)
+	!b%rot = 0.5d0 * (b%rot + b%rot0)
+	b%pos = LERP * b%pos + (1.d0 - LERP) * b%pos0
+	b%rot = LERP * b%rot + (1.d0 - LERP) * b%rot0
 	call update_vertices(b)
 
 end subroutine collide_bodies
