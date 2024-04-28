@@ -68,6 +68,7 @@ module ribbit
 
 		double precision :: ground_pos(ND)
 		double precision :: ground_nrm(ND)
+		logical :: has_ground
 
 		! Input time bounds and step size
 		double precision :: t_start, t_end, dt
@@ -448,6 +449,7 @@ function read_world(filename, permissive) result(w)
 	w%grav_accel = 0.d0
 	w%ground_pos = 0.d0
 	w%ground_nrm = [0, 0, 1]
+	w%has_ground = .false.
 	w%t_start = 0.d0
 	w%t_end = 1.d0
 	w%dt = 0.1d0
@@ -474,8 +476,10 @@ function read_world(filename, permissive) result(w)
 		!print *, "grav_accel = ", w%grav_accel
 
 	case ("ground_pos")
+		w%has_ground = .true.
 		w%ground_pos = get_array(json, p, ND)
 	case ("ground_nrm")
+		w%has_ground = .true.
 		w%ground_nrm = get_array(json, p, ND)
 		call normalize_s(w%ground_nrm)
 
@@ -939,7 +943,8 @@ subroutine update_body(w, b, ib)
 	ncolliding = 0
 	r1 = 0.d0
 	do i = 1, b%geom%nv
-		if (dot_product(w%ground_nrm, b%geom%v(:,i) - w%ground_pos) <= 0) then
+		! TODO: change `has_ground` check into an early return after refactoring
+		if (w%has_ground .and. dot_product(w%ground_nrm, b%geom%v(:,i) - w%ground_pos) <= 0) then
 			colliding = .true.
 			ncolliding = ncolliding + 1
 			r1 = r1 + b%geom%v(:,i) - b%pos
@@ -957,7 +962,6 @@ subroutine update_body(w, b, ib)
 		! center of mass)
 		vp2 = 0
 		vp1 = b%vel + cross(b%ang_vel, r1)
-		!vp1 = v0 + cross(b%ang_vel, r1)
 
 		! Relative velocity
 		vr = vp2 - vp1
