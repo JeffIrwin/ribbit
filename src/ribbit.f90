@@ -952,7 +952,7 @@ subroutine update_body(w, b)
 
 	double precision :: rot0(ND, ND), i1_r1_nrm(ND), &
 		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
-		jr_mag, e, tng(ND), fe(ND), jf_mag, i1_r1_tng(ND), jf_max
+		impulse_nrm, e, tng(ND), fe(ND), impulse_tng, i1_r1_tng(ND), impulse_max
 
 	double precision :: rhs(ND,2)
 	double precision, allocatable :: tmp(:,:)
@@ -993,7 +993,7 @@ subroutine collide_ground_body(w, b)
 
 	double precision :: i1_r1_nrm(ND), &
 		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
-		jr_mag, e, tng(ND), fe(ND), jf_mag, i1_r1_tng(ND), jf_max
+		impulse_nrm, e, tng(ND), fe(ND), impulse_tng, i1_r1_tng(ND), impulse_max
 
 	double precision :: rhs(ND,2)
 	double precision, allocatable :: tmp(:,:)
@@ -1069,30 +1069,27 @@ subroutine collide_ground_body(w, b)
 	e = w%matls(b%matl)%coef_rest
 
 	! Normal impulse magnitude.  Ref: https://en.wikipedia.org/wiki/Collision_response
-	jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
+	impulse_nrm = -(1.d0 + e) * dot_product(vr, nrm) / &
 		(1.d0/m1 + dot_product(nrm, cross(i1_r1_nrm, r1)))
-	!print *, "jr_mag = ", jr_mag
+	!print *, "impulse_nrm = ", impulse_nrm
 
 	! Ref:  https://gafferongames.com/post/collision_response_and_coulomb_friction/
 
-	!jf_mag = -e * dot_product(vr, tng) / &
-	!jf_mag = -(1.d0 + e) * dot_product(vr, tng) / &
-	jf_mag = -dot_product(vr, tng) / &
+	!impulse_tng = -e * dot_product(vr, tng) / &
+	!impulse_tng = -(1.d0 + e) * dot_product(vr, tng) / &
+	impulse_tng = -dot_product(vr, tng) / &
 		(1.d0/m1 + dot_product(tng, cross(i1_r1_tng, r1)))
 
 	! Apply friction cone clamp.  TODO: when should this be static friction?
-	jf_max = w%matls(b%matl)%friction_dyn * abs(jr_mag)
-	jf_mag = clamp(jf_mag, -jf_max, jf_max)
-	!print *, "jf_mag = ", jf_mag
+	impulse_max = w%matls(b%matl)%friction_dyn * abs(impulse_nrm)
+	impulse_tng = clamp(impulse_tng, -impulse_max, impulse_max)
+	!print *, "impulse_tng = ", impulse_tng
 
-	! Lerp velocity to add a little damping
-	#define LERP 1.00d0
-	!b%vel = 0.5d0 * (b%vel0 + b%vel) - jr_mag * nrm / m1 - jf_mag * tng / m1
-	b%vel = LERP * b%vel + (1.d0 - LERP) * b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
-	!b%vel = b%vel0 - jr_mag * nrm / m1 - jf_mag * tng / m1
-	!b%vel = b%vel - jr_mag * nrm / m1 - jf_mag * tng / m1
+	! Lerp velocity to add a little damping?
+	#define LERP 1.d0
+	b%vel = LERP * b%vel + (1.d0 - LERP) * b%vel0 - impulse_nrm * nrm / m1 - impulse_tng * tng / m1
 
-	b%ang_vel = b%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
+	b%ang_vel = b%ang_vel - impulse_nrm * i1_r1_nrm - impulse_tng * i1_r1_tng
 
 	!print *, "b%ang_vel", b%ang_vel
 
@@ -1124,8 +1121,8 @@ subroutine collide_body_pair(w, a, b)
 	double precision :: va1(ND), va2(ND), vb1(ND), vb2(ND), vb3(ND), p(ND), &
 		r(ND), r1(ND), r2(ND), nrm(ND), vp1(ND), vp2(ND), vr(ND), m1, m2, &
 		i1(ND,ND), i2(ND,ND), fe1(ND), fe2(ND), tng(ND), i1_r1_nrm(ND), &
-		i1_r1_tng(ND), i2_r2_nrm(ND), i2_r2_tng(ND), e, jr_mag, jf_mag, &
-		friction_dyn, jf_max, nrm_(ND)
+		i1_r1_tng(ND), i2_r2_nrm(ND), i2_r2_tng(ND), e, impulse_nrm, impulse_tng, &
+		friction_dyn, impulse_max, nrm_(ND)
 	double precision :: rhs(ND,2)
 	double precision, allocatable :: tmp(:,:)
 
@@ -1225,6 +1222,9 @@ subroutine collide_body_pair(w, a, b)
 
 	! If the bodies are already moving away from each other, stop!  Collision
 	! response was probably just calculated already in the last time step
+	!
+	! This definitely reduces glitchiness, but it's not perfect.  See
+	! space-cubes in the current commit
 	if (dot_product(vr, nrm) < 0) return
 
 	! Mass and inertia *in world frame of reference*
@@ -1293,17 +1293,17 @@ subroutine collide_body_pair(w, a, b)
 	)
 
 	! Normal impulse magnitude.  Ref: https://en.wikipedia.org/wiki/Collision_response
-	jr_mag = -(1.d0 + e) * dot_product(vr, nrm) / &
+	impulse_nrm = -(1.d0 + e) * dot_product(vr, nrm) / &
 		(1.d0 / m1 + 1.d0 / m2 + &
 		dot_product(nrm, cross(i1_r1_nrm, r1) + &
 		                 cross(i2_r2_nrm, r2)))
-	!print *, "jr_mag = ", jr_mag
+	!print *, "impulse_nrm = ", impulse_nrm
 
 	! TODO: if the `e` fudge factor is changed, make sure to change the
 	! body-to-ground case too
-	!jf_mag = -e * dot_product(vr, tng) / &
-	!jf_mag = -(1.d0 + e) * dot_product(vr, tng) / &
-	jf_mag = -dot_product(vr, tng) / &
+	!impulse_tng = -e * dot_product(vr, tng) / &
+	!impulse_tng = -(1.d0 + e) * dot_product(vr, tng) / &
+	impulse_tng = -dot_product(vr, tng) / &
 		(1.d0 / m1 +  + 1.d0 / m2 + &
 		dot_product(tng, cross(i1_r1_tng, r1) + &
 		                 cross(i2_r2_tng, r2)))
@@ -1314,15 +1314,15 @@ subroutine collide_body_pair(w, a, b)
 	)
 
 	! Apply friction cone clamp.  TODO: when should this be static friction?
-	jf_max = friction_dyn * abs(jr_mag)
-	jf_mag = clamp(jf_mag, -jf_max, jf_max)
-	!print *, "jf_mag = ", jf_mag
+	impulse_max = friction_dyn * abs(impulse_nrm)
+	impulse_tng = clamp(impulse_tng, -impulse_max, impulse_max)
+	!print *, "impulse_tng = ", impulse_tng
 
 	!********
 
-	a%vel = a%vel - jr_mag * nrm / m1 - jf_mag * tng / m1
+	a%vel = a%vel - impulse_nrm * nrm / m1 - impulse_tng * tng / m1
 
-	a%ang_vel = a%ang_vel - jr_mag * i1_r1_nrm - jf_mag * i1_r1_tng
+	a%ang_vel = a%ang_vel - impulse_nrm * i1_r1_nrm - impulse_tng * i1_r1_tng
 
 	! TODO: remove LERP if 1 is ok
 	#define LERP 1.0d0
@@ -1333,9 +1333,9 @@ subroutine collide_body_pair(w, a, b)
 
 	!********
 
-	b%vel = b%vel + jr_mag * nrm / m2 + jf_mag * tng / m2
+	b%vel = b%vel + impulse_nrm * nrm / m2 + impulse_tng * tng / m2
 
-	b%ang_vel = b%ang_vel + jr_mag * i2_r2_nrm + jf_mag * i2_r2_tng
+	b%ang_vel = b%ang_vel + impulse_nrm * i2_r2_nrm + impulse_tng * i2_r2_tng
 
 	b%pos = LERP * b%pos + (1.d0 - LERP) * b%pos0
 	b%rot = LERP * b%rot + (1.d0 - LERP) * b%rot0
