@@ -866,11 +866,11 @@ subroutine ribbit_run(w, dump_csv)
 		end do
 
 		do ib = 1, size(w%bodies)
-			call apply_grav(w, w%bodies(ib))
+			call update_body(w, w%bodies(ib))
 		end do
 
 		do ib = 1, size(w%bodies)
-			call collide_ground(w, w%bodies(ib))
+			call collide_ground_body(w, w%bodies(ib))
 		end do
 
 		do ib = 1, size(w%bodies)
@@ -878,8 +878,8 @@ subroutine ribbit_run(w, dump_csv)
 			!do ia = 1, ib - 1
 			!do ia = ib + 1, size(w%bodies)
 				if (ia == ib) cycle
-				call collide_bodies(w, w%bodies(ia), w%bodies(ib))
-				!call collide_bodies(w, w%bodies(ib), w%bodies(ia))
+				call collide_body_pair(w, w%bodies(ia), w%bodies(ib))
+				!call collide_body_pair(w, w%bodies(ib), w%bodies(ia))
 			end do
 		end do
 
@@ -909,10 +909,10 @@ end subroutine cache_body
 
 !===============================================================================
 
-subroutine apply_grav(w, b)
+subroutine update_body(w, b)
 
-	! Update body `b` due to gravitational acceleration.  Could be renamed to
-	! something like `apply_forces()` if generalized to other things
+	! Update the pose of body `b` due to its linear and angular velocity, and
+	! update its velocity due to forces, e.g. gravitational acceleration
 
 	type(world_t), intent(inout) :: w
 	type(body_t), intent(inout) :: b
@@ -937,8 +937,7 @@ subroutine apply_grav(w, b)
 	b%pos = b%pos0 + 0.5 * (b%vel0 + b%vel) * w%dt
 
 	! Update rotations by multiplying by a rotation matrix, not by
-	! adding vec3's!  Rotations are not related to gravity, but we have to set
-	! the pose before calling expensive update_vertices()
+	! adding vec3's!
 	b%rot = matmul(get_rot(b%ang_vel * w%dt), b%rot)
 
 	! Rounding errors might accumulate after many time steps.
@@ -947,11 +946,11 @@ subroutine apply_grav(w, b)
 
 	call update_vertices(b)
 
-end subroutine apply_grav
+end subroutine update_body
 
 !===============================================================================
 
-subroutine collide_ground(w, b)
+subroutine collide_ground_body(w, b)
 
 	! Update body `b` due to collision with the global ground, which is like a
 	! special symbolic body with infinite inertia and extents
@@ -1077,11 +1076,11 @@ subroutine collide_ground(w, b)
 
 	!print *, ""
 
-end subroutine collide_ground
+end subroutine collide_ground_body
 
 !===============================================================================
 
-subroutine collide_bodies(w, a, b)
+subroutine collide_body_pair(w, a, b)
 
 	! Check if any edge of body `a` collides with any face of body `b`.  If so,
 	! update their outgoing velocity states
@@ -1103,7 +1102,7 @@ subroutine collide_bodies(w, a, b)
 
 	integer :: stat, ita, ie, iva1, iva2, itb, ivb1, ivb2, ivb3, nr
 
-	!print *, "starting collide_bodies()"
+	!print *, "starting collide_body_pair()"
 	!print *, "a%pos = ", a%pos
 	!print *, "b%pos = ", b%pos
 	!print *, ""
@@ -1207,7 +1206,7 @@ subroutine collide_bodies(w, a, b)
 
 	! Sum of external forces acting on body.  TODO: dry up this calculation when
 	! more forces are added (e.g. inter-body gravity).  It's already calculated
-	! in update_body()
+	! in collide_ground_body()
 	fe1 = m1 * w%grav_accel
 	fe2 = m2 * w%grav_accel
 	!print *, "fe = ", fe
@@ -1313,7 +1312,7 @@ subroutine collide_bodies(w, a, b)
 	b%rot = LERP * b%rot + (1.d0 - LERP) * b%rot0
 	call update_vertices(b)
 
-end subroutine collide_bodies
+end subroutine collide_body_pair
 
 !===============================================================================
 
