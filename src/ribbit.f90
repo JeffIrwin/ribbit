@@ -711,7 +711,7 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	double precision, allocatable :: lhs(:,:)
 	double precision :: line_tol
 
-	integer :: i, io
+	integer :: io
 
 	! Vectors along the triangle's edges
 	u = b - a
@@ -819,23 +819,23 @@ end function clamp
 
 !===============================================================================
 
-subroutine ribbit_run(w, dump_csv)
+subroutine ribbit_run(w, dump_csv_)
 
 	use json_module
 	type(world_t), intent(inout) :: w
-	logical, intent(in) :: dump_csv
+	logical, intent(in) :: dump_csv_
 
 	!********
 
 	character(len = : ), allocatable :: csv_file
 
-	integer :: ia, ib, io
+	integer :: io
 	integer :: fid
 
 	write(*,*) "starting ribbit_run()"
 
-	if (dump_csv) then
-		! TODO: set filename based on input
+	if (dump_csv_) then
+		! TODO: set filename based on input.  Refactor out of ribbit_run()
 		csv_file = "dump.csv"
 		open(newunit = fid, file = csv_file, action = "write", iostat = io)
 		call handle_open_write_io(csv_file, io)
@@ -851,16 +851,7 @@ subroutine ribbit_run(w, dump_csv)
 		!print *, "t, z = ", w%t, w%bodies(1)%pos(3)
 		!print *, "w%it = ", w%it
 
-		if (dump_csv) then
-			write(fid, "(es16.6)", advance = "no") w%t
-			do ib = 1, size(w%bodies)
-				write(fid, "(3es16.6)", advance = "no") w%bodies(ib)%pos
-				write(fid, "(3es16.6)", advance = "no") w%bodies(ib)%vel
-				! could also add rot/ang_vel if there's a need
-			end do
-			write(fid, *)
-		end if
-
+		call dump_csv             (w, dump_csv_, fid)
 		call cache_bodies         (w)
 		call update_bodies        (w)
 		call collide_ground_bodies(w)
@@ -876,6 +867,27 @@ subroutine ribbit_run(w, dump_csv)
 	write(*,*) "ending ribbit_run()"
 
 end subroutine ribbit_run
+
+!===============================================================================
+
+subroutine dump_csv(w, dump_csv_, fid)
+	type(world_t), intent(inout) :: w
+	logical, intent(in) :: dump_csv_
+	integer, intent(in) :: fid
+
+	integer :: ib
+
+	if (.not. dump_csv_) return
+
+	write(fid, "(es16.6)", advance = "no") w%t
+	do ib = 1, size(w%bodies)
+		write(fid, "(3es16.6)", advance = "no") w%bodies(ib)%pos
+		write(fid, "(3es16.6)", advance = "no") w%bodies(ib)%vel
+		! could also add rot/ang_vel if there's a need
+	end do
+	write(fid, *)
+
+end subroutine dump_csv
 
 !===============================================================================
 
@@ -948,19 +960,6 @@ subroutine update_body(w, b)
 
 	!********
 
-	double precision, parameter :: tol = 0.001  ! coincident vector angle-ish tol
-
-	double precision :: rot0(ND, ND), i1_r1_nrm(ND), &
-		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
-		impulse_nrm, e, tng(ND), fe(ND), impulse_tng, i1_r1_tng(ND), impulse_max
-
-	double precision :: rhs(ND,2)
-	double precision, allocatable :: tmp(:,:)
-
-	integer :: i, ncolliding, ia
-
-	logical :: colliding
-
 	b%vel = b%vel0 + w%grav_accel * w%dt
 
 	b%pos = b%pos0 + 0.5 * (b%vel0 + b%vel) * w%dt
@@ -991,14 +990,14 @@ subroutine collide_ground_body(w, b)
 
 	double precision, parameter :: tol = 0.001  ! coincident vector angle-ish tol
 
-	double precision :: i1_r1_nrm(ND), &
-		vr(ND), vp1(ND), vp2(ND), r1(ND), nrm(ND), m1, i1(ND, ND), &
-		impulse_nrm, e, tng(ND), fe(ND), impulse_tng, i1_r1_tng(ND), impulse_max
+	double precision :: i1_r1_nrm(ND), vr(ND), vp1(ND), vp2(ND), r1(ND), &
+		nrm(ND), m1, i1(ND, ND), impulse_nrm, e, tng(ND), fe(ND), &
+		impulse_tng, i1_r1_tng(ND), impulse_max
 
 	double precision :: rhs(ND,2)
 	double precision, allocatable :: tmp(:,:)
 
-	integer :: i, ncolliding, ia
+	integer :: i, ncolliding
 
 	if (.not. w%has_ground) return
 
