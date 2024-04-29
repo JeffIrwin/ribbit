@@ -861,27 +861,10 @@ subroutine ribbit_run(w, dump_csv)
 			write(fid, *)
 		end if
 
-		do ib = 1, size(w%bodies)
-			call cache_body(w%bodies(ib))
-		end do
-
-		do ib = 1, size(w%bodies)
-			call update_body(w, w%bodies(ib))
-		end do
-
-		do ib = 1, size(w%bodies)
-			call collide_ground_body(w, w%bodies(ib))
-		end do
-
-		do ib = 1, size(w%bodies)
-			do ia = 1, size(w%bodies)
-			!do ia = 1, ib - 1
-			!do ia = ib + 1, size(w%bodies)
-				if (ia == ib) cycle
-				call collide_body_pair(w, w%bodies(ia), w%bodies(ib))
-				!call collide_body_pair(w, w%bodies(ib), w%bodies(ia))
-			end do
-		end do
+		call cache_bodies         (w)
+		call update_bodies        (w)
+		call collide_ground_bodies(w)
+		call collide_bodies       (w)
 
 		call write_step(w)
 		w%it = w%it + 1
@@ -893,6 +876,52 @@ subroutine ribbit_run(w, dump_csv)
 	write(*,*) "ending ribbit_run()"
 
 end subroutine ribbit_run
+
+!===============================================================================
+
+subroutine cache_bodies(w)
+	type(world_t), intent(inout) :: w
+	integer :: ib
+	do ib = 1, size(w%bodies)
+		call cache_body(w%bodies(ib))
+	end do
+end subroutine cache_bodies
+
+!===============================================================================
+
+subroutine update_bodies(w)
+	type(world_t), intent(inout) :: w
+	integer :: ib
+	do ib = 1, size(w%bodies)
+		call update_body(w, w%bodies(ib))
+	end do
+end subroutine update_bodies
+
+!===============================================================================
+
+subroutine collide_ground_bodies(w)
+	type(world_t), intent(inout) :: w
+	integer :: ib
+	do ib = 1, size(w%bodies)
+		call collide_ground_body(w, w%bodies(ib))
+	end do
+end subroutine collide_ground_bodies
+
+!===============================================================================
+
+subroutine collide_bodies(w)
+	type(world_t), intent(inout) :: w
+	integer :: ia, ib
+	do ib = 1, size(w%bodies)
+		do ia = 1, size(w%bodies)
+		!do ia = 1, ib - 1
+		!do ia = ib + 1, size(w%bodies)
+			if (ia == ib) cycle
+			call collide_body_pair(w, w%bodies(ia), w%bodies(ib))
+			!call collide_body_pair(w, w%bodies(ib), w%bodies(ia))
+		end do
+	end do
+end subroutine collide_bodies
 
 !===============================================================================
 
