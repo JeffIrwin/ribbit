@@ -1,0 +1,36 @@
+{
+	"world":
+	{
+		"grav_accel": [0, 0, -9.807],  # m/s^2
+		"t_start": 0,
+		"t_end"  : 5.0, # s
+		"dt": 0.01,
+		"ground_nrm": [0.08, 0.0, 0.9],
+		"bodies":
+		[
+			{
+				"geom": "inputs/sphere.obj",
+				"pos": [0, 0, 2],
+				#"ang": [0, 0, 0],
+				#"ang_vel": [0, 0, 0],
+				"matl": 1
+			},
+			# i haven't optimized collisions so this is slow af
+			{
+				"geom": "inputs/sphere.obj",
+				"pos": [0, 2.2, 2],
+				#"ang": [0, 0, 0],
+				"ang_vel": [0, -30, 0],
+				"matl": 1
+			},
+		],
+		"matls":
+		[
+			{
+				"coef_rest": 0.74,
+				"friction_dyn": 0.15,
+				"dens": 2500.0 # kg/m^3
+			}
+		]
+	}
+}
