@@ -20,7 +20,7 @@
 				"geom": "inputs/sphere.obj",
 				"pos": [0, 3.2, 2],
 				#"ang": [0, 0, 0],
-				"ang_vel": [90, 0, 0],
+				"ang_vel": [-90, 0, 0],
 				"vel": [0, -0.8, 0],
 				"matl": 1
 			},

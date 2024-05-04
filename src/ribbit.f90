@@ -1182,7 +1182,10 @@ subroutine collide_body_pair(w, a, b)
 	!print *, ""
 
 	! Return early if bounding box check passes.  Box is cached in
-	! update_vertices()
+	! update_vertices().  This is a simple but powerful optimization.  A better
+	! but more complex approach would use something like binary space
+	! partitioning.  The simple approach does not work when bodies are separated
+	! by a diagonal plane.
 	box_tol = 0.01
 	do i = 1, ND
 		! TODO: make box_tol a percentage instead of absolute
@@ -1197,7 +1200,7 @@ subroutine collide_body_pair(w, a, b)
 	r   = 0.d0
 	nrm = 0.d0
 	nr  = 0
-	!$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(a, b, r, nrm, nr)
+	!$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(a, b) REDUCTION(+:r, nrm, nr)
 	do ita = 1, a%geom%nt
 	do ie  = 1, NT
 
@@ -1228,11 +1231,8 @@ subroutine collide_body_pair(w, a, b)
 				p, stat)
 
 			if (stat == 0) then
-				!$OMP CRITICAL
-				! TODO: OMP REDUCTION instead of CRITICAL
-
-				print *, "collision detected"
-				print *, "p = ", p
+				!print *, "collision detected"
+				!print *, "p = ", p
 
 				nr = nr + 1
 
@@ -1242,9 +1242,8 @@ subroutine collide_body_pair(w, a, b)
 				nrm_ = normalize(cross(vb2 - vb1, vb3 - vb1))
 				nrm  = nrm + nrm_
 
-				print *, "nrm_ = ", nrm_
+				!print *, "nrm_ = ", nrm_
 
-				!$OMP END CRITICAL
 			end if
 
 		end do
