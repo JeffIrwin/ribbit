@@ -43,9 +43,6 @@ module ribbit
 		type(geom_t) :: geom
 		integer :: matl  ! index of world%matls(:) array
 
-		! TODO: add a "mass" member to body. Might be more convenient than
-		! density for planetary models
-
 		double precision :: scale
 
 		double precision :: pos(ND)
@@ -234,7 +231,7 @@ subroutine get_inertia(b, w)
 
 	!********
 
-	double precision :: vol_tet, com_tet(ND), vol, com(ND)
+	double precision :: vol_tet, com_tet(ND), vol, com(ND), dens
 	double precision :: v(ND, 4), x(4), y(4), z(4)
 	double precision :: ixx, iyy, izz, ixy, iyz, izx
 
@@ -346,7 +343,14 @@ subroutine get_inertia(b, w)
 	b%inertia(3,2) = b%inertia(2,3)
 	b%inertia(1,3) = b%inertia(3,1)
 
-	b%inertia = b%inertia * w%matls(b%matl)%dens
+	if (b%mass > 0) then
+		! Mass can be set as an input instead of density
+		dens = b%mass / b%vol
+	else
+		dens = w%matls(b%matl)%dens
+	end if
+
+	b%inertia = b%inertia * dens
 	write(*,*) "b%inertia = "
 	write(*, "(3es16.6)") b%inertia
 
@@ -359,7 +363,7 @@ subroutine get_inertia(b, w)
 	! do not warp the shape of the body
 	b%geom%v0 = b%geom%v
 
-	b%mass = w%matls(b%matl)%dens * b%vol
+	b%mass = dens * b%vol
 
 	write(*,*) "vol  = ", b%vol
 	write(*,*) "com  = ", com
@@ -521,6 +525,9 @@ function read_world(filename, permissive) result(w)
 			has_geom = .false.
 			ang = 0.d0
 
+			! If mass is 0, then it's calculated from density and volume
+			w%bodies(ib)%mass = 0.d0
+
 			call json%get_child(p, ib, pc)
 
 			!print *, "traversing body ", ib
@@ -559,6 +566,9 @@ function read_world(filename, permissive) result(w)
 
 					! Convert from degrees to radians
 					w%bodies(ib)%ang_vel = PI / 180.d0 * w%bodies(ib)%ang_vel
+
+				case ("mass")
+					call json%get(pgc, "@", w%bodies(ib)%mass)
 
 				case ("matl")
 					call json%get(pgc, "@", w%bodies(ib)%matl)
@@ -1058,8 +1068,7 @@ subroutine add_force(w, a, b)
 	double precision :: apos(ND), bpos(ND)
 	double precision :: f(ND), r(ND), r2
 
-	!grav_const = 6.6743015d-11  ! actual value (N-m^2/kg^2)
-	!grav_const = 6.6743015d-4
+	if (w%grav_const == 0) return
 
 	!! 1st order approximation
 	!apos = a%pos
