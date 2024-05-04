@@ -43,6 +43,8 @@ module ribbit
 		type(geom_t) :: geom
 		integer :: matl  ! index of world%matls(:) array
 
+		double precision :: scale
+
 		double precision :: pos(ND)
 		double precision :: vel(ND)
 
@@ -213,7 +215,8 @@ end function cross
 
 subroutine get_inertia(b, w)
 
-	! Get mass, center of mass, volume, and inertia tensor
+	! Apply scaling, then get mass, center of mass, volume, and inertia tensor.
+	! Maybe this should be renamed init_body()
 
 	type(body_t), intent(inout) :: b
 	type(world_t), intent(in)   :: w
@@ -225,6 +228,8 @@ subroutine get_inertia(b, w)
 	double precision :: ixx, iyy, izz, ixy, iyz, izx
 
 	integer :: i, j, k
+
+	b%geom%v = b%geom%v * b%scale
 
 	vol = 0.d0
 	com = 0.d0
@@ -339,8 +344,8 @@ subroutine get_inertia(b, w)
 		b%geom%v(:,i) = b%geom%v(:,i) - com
 	end do
 
-	! Backup original vertex locations so that rounding errors do not warp the
-	! shape of the body
+	! Backup original vertex locations so that rounding errors during rotation
+	! do not warp the shape of the body
 	b%geom%v0 = b%geom%v
 
 	b%mass = w%matls(b%matl)%dens * b%vol
@@ -491,8 +496,9 @@ function read_world(filename, permissive) result(w)
 		do ib = 1, count_
 
 			! Set defaults for each body
-			w%bodies(ib)%pos = 0.d0
-			w%bodies(ib)%vel = 0.d0
+			w%bodies(ib)%scale   = 1.d0
+			w%bodies(ib)%pos     = 0.d0
+			w%bodies(ib)%vel     = 0.d0
 			w%bodies(ib)%ang_vel = 0.d0
 			w%bodies(ib)%matl = 1
 			has_geom = .false.
@@ -515,6 +521,9 @@ function read_world(filename, permissive) result(w)
 					has_geom = .true.
 					call json%get(pgc, "@", geom_name)
 					w%bodies(ib)%geom = read_geom(geom_name)
+
+				case ("scale")
+					call json%get(pgc, "@", w%bodies(ib)%scale)
 
 				case ("pos")
 					w%bodies(ib)%pos = get_array(json, pgc, ND)
@@ -541,6 +550,10 @@ function read_world(filename, permissive) result(w)
 				case default
 					call bad_key(key, permissive)
 				end select
+
+				!! could apply scaling here, but i don't like how deeply it's
+				!! nested in the structs
+				!w%bodies(ib)%geom%v = w%bodies... * ...scale
 
 			end do
 

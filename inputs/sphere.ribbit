@@ -11,6 +11,7 @@
 			{
 				"geom": "inputs/sphere.obj",
 				"pos": [0, 0, 2],
+				"scale": 0.3,
 				#"ang": [0, 0, 0],
 				#"ang_vel": [0, 0, 0],
 				"matl": 1
