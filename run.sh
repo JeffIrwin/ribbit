@@ -49,8 +49,8 @@ done
 # TODO: DRY up args between build and run.  Maybe just make "build" vs "run ribbit"
 # or "run test" a variable?
 if [[ "$build" == "true" ]]; then
-	time fpm build --compiler ifx --c-compiler gcc --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile $profile $verbose -- "${ribbit_args[@]}"
+	time fpm build --compiler ifx --c-compiler gcc --flag "-fpp -qmkl -qopenmp -heap-arrays0 -check noarg_temp_created" --profile $profile $verbose -- "${ribbit_args[@]}"
 else
-	time fpm run "$exe" --compiler ifx --c-compiler gcc --flag "-fpp -qmkl -heap-arrays0 -check noarg_temp_created" --profile $profile $verbose -- "${ribbit_args[@]}"
+	time fpm run "$exe" --compiler ifx --c-compiler gcc --flag "-fpp -qmkl -qopenmp -heap-arrays0 -check noarg_temp_created" --profile $profile $verbose -- "${ribbit_args[@]}"
 fi
 

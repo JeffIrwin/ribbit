@@ -722,12 +722,13 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 	double precision :: u(ND), v(ND), ef(ND), params(4)
 	double precision :: mat(ND, ND), rhs(ND, 1)
 	double precision, allocatable :: lhs(:,:)
-	double precision :: line_tol
+	double precision :: box_tol, line_tol
 
 	integer :: i, io
 
 	! Check bounding boxes first.  For two spheres with ~1000 triangles, this is
 	! about 10 times faster than unconditionally doing the linear algebra
+	box_tol = 0.01
 	do i = 1, ND
 
 		min_tri = min(a(i), b(i), c(i))
@@ -736,9 +737,9 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 		min_lin = min(e(i), f(i))
 		max_lin = max(e(i), f(i))
 
-		! TODO: include tol?
-		if (max_lin < min_tri .or. &
-			max_tri < min_lin) then
+		! TODO: make box_tol a percentage instead of absolute
+		if (max_lin < min_tri - box_tol .or. &
+			max_tri < min_lin - box_tol) then
 			stat = -3
 			return
 		end if
@@ -1182,11 +1183,10 @@ subroutine collide_body_pair(w, a, b)
 
 	! Iterate through each edge of body `a` and get the average position `r` and
 	! normal `nrm` of the collision point in the global coordinate system
-	!
-	! TODO: parallelize
 	r   = 0.d0
 	nrm = 0.d0
 	nr  = 0
+	!$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(a, b, r, nrm, nr)
 	do ita = 1, a%geom%nt
 	do ie  = 1, NT
 
@@ -1217,6 +1217,9 @@ subroutine collide_body_pair(w, a, b)
 				p, stat)
 
 			if (stat == 0) then
+				!$OMP CRITICAL
+				! TODO: OMP REDUCTION instead of CRITICAL
+
 				print *, "collision detected"
 				print *, "p = ", p
 
@@ -1230,12 +1233,14 @@ subroutine collide_body_pair(w, a, b)
 
 				print *, "nrm_ = ", nrm_
 
+				!$OMP END CRITICAL
 			end if
 
 		end do
 
 	end do
 	end do
+	!$OMP END PARALLEL DO
 
 	if (nr == 0) return  ! no collision
 
