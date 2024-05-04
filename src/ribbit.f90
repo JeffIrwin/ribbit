@@ -60,6 +60,8 @@ module ribbit
 		! Bounding box.  Could be in geom instead of body
 		double precision :: box(ND,2)
 
+		double precision :: force(ND)  ! net force *on* the body
+
 	end type body_t
 
 	!********
@@ -198,6 +200,8 @@ function read_geom(filename) result(g)
 	!print "(3es16.6)", g%v
 	!print "(3i12)", g%t
 	!print "(3i12)", g%t(:, 1: min(10, g%nt))
+
+	write(*,*)
 
 end function read_geom
 
@@ -358,6 +362,8 @@ subroutine get_inertia(b, w)
 	write(*,*) "mass = ", b%mass
 
 	! TODO: log bounding box summary
+
+	write(*,*)
 
 end subroutine get_inertia
 
@@ -877,20 +883,22 @@ subroutine ribbit_run(w, dump_csv_)
 		call handle_open_write_io(csv_file, io)
 	end if
 
-	! TODO: run an initial check to see if bodies are already colliding
-	! initially.  Panic?
-
 	w%t = w%t_start
 	w%it = 0
 	call init_bodies(w)
 	call write_step(w)
+
+	! TODO: run an initial check to see if bodies are already colliding
+	! initially.  Panic?
+
 	do while (w%t <= w%t_end)
 
 		!print *, "t, z = ", w%t, w%bodies(1)%pos(3)
-		print *, "w%it = ", w%it
+		!print *, "w%it = ", w%it
 
 		call dump_csv             (w, dump_csv_, fid)
 		call cache_bodies         (w)
+		! TODO: add a sum_force() fn to iterate on body pairs
 		call update_bodies        (w)
 		call collide_ground_bodies(w)
 		call collide_bodies       (w)
@@ -1002,14 +1010,21 @@ end subroutine cache_body
 subroutine update_body(w, b)
 
 	! Update the pose of body `b` due to its linear and angular velocity, and
-	! update its velocity due to forces, e.g. gravitational acceleration
+	! update its velocity due to net force, e.g. gravitational acceleration
 
 	type(world_t), intent(inout) :: w
 	type(body_t), intent(inout) :: b
 
 	!********
 
-	b%vel = b%vel0 + w%grav_accel * w%dt
+	double precision :: accel(ND)
+
+	! Sum forces.  TODO: move to sum_force()
+	b%force = 0.d0
+	b%force = b%force + b%mass * w%grav_accel
+
+	accel = b%force / b%mass
+	b%vel = b%vel0 + accel * w%dt
 
 	b%pos = b%pos0 + 0.5 * (b%vel0 + b%vel) * w%dt
 
@@ -1086,9 +1101,8 @@ subroutine collide_ground_body(w, b)
 	m1 = b%mass
 	i1 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
 
-	! Sum of external forces acting on body
-	fe = m1 * w%grav_accel
-	!print *, "fe = ", fe
+	! Net force acting on body
+	fe = b%force
 
 	! Tangent vector
 	if (abs(dot_product(normalize(vr), nrm)) > tol) then
@@ -1200,7 +1214,7 @@ subroutine collide_body_pair(w, a, b)
 	r   = 0.d0
 	nrm = 0.d0
 	nr  = 0
-	!$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(a, b) REDUCTION(+:r, nrm, nr)
+	!$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(a, b) REDUCTION(+: r, nrm, nr)
 	do ita = 1, a%geom%nt
 	do ie  = 1, NT
 
@@ -1254,21 +1268,23 @@ subroutine collide_body_pair(w, a, b)
 
 	if (nr == 0) return  ! no collision
 
+	print *, "collision at w%it = ", to_str(w%it)
+
 	r = r / nr
 
 	!nrm = nrm / nr
 	call normalize_s(nrm)
 
-	print *, "r = ", r
-	print *, "nrm = ", nrm
+	!print *, "r = ", r
+	!print *, "nrm = ", nrm
 	!print *, "nr = ", nr
 
 	! Get collision point coordinate relative to each bodies' center of mass
 	r1 = r - a%pos
 	r2 = r - b%pos
 
-	print *, "r1 = ", r1
-	print *, "r2 = ", r2
+	!print *, "r1 = ", r1
+	!print *, "r2 = ", r2
 
 	! Collide body `a` (body 1) with `b` (body 2).  This is similar to the
 	! body-to-ground collision case, but now there are two actual bodies
@@ -1294,11 +1310,9 @@ subroutine collide_body_pair(w, a, b)
 	i1 = matmul(matmul(a%rot, a%inertia), transpose(a%rot))
 	i2 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
 
-	! Sum of external forces acting on body.  TODO: dry up this calculation when
-	! more forces are added (e.g. inter-body gravity).  It's already calculated
-	! in collide_ground_body()
-	fe1 = m1 * w%grav_accel
-	fe2 = m2 * w%grav_accel
+	! Net force acting on bodies
+	fe1 = a%force
+	fe2 = b%force
 	!print *, "fe = ", fe
 
 	! Tangent vector
@@ -1307,7 +1321,7 @@ subroutine collide_body_pair(w, a, b)
 		call normalize_s(tng)
 
 	! TODO: how should the next two cases be distinguished?  Maybe the condition
-	! should be based on relative acceleration instead of relative forces?
+	! should be based on relative acceleration instead of relative force?
 	! Subtract accel from each other?
 	else if (norm2(fe1) >= norm2(fe2) .and. &
 		abs(dot_product(normalize(fe1), nrm)) > tol) then
