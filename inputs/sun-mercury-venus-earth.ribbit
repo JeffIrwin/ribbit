@@ -1,0 +1,44 @@
+{
+	"world":
+	{
+		"grav_const": 6.6743015d-11,   # actual value (N-m^2/kg^2)
+		"t_start": 0,
+		"t_end"  : 1.d8, # s
+		"dt": 2.7d5,
+		"bodies":
+		[
+			{
+				# sun
+				"geom": "inputs/sphere.obj",
+				"pos": [0, 0, 0],
+				"vel": [0, 0, 0],
+				"mass": 1.989e30,
+				"scale": 20e9, # scale is the only thing not to scale
+			},
+			{
+				# earth
+				"geom": "inputs/sphere.obj",
+				"pos": [150.88e9, 0, 0],
+				"vel": [0, 29784.8, 0],
+				"mass": 5.972e24,
+				"scale": 10e9, # scale is the only thing not to scale
+			},
+			{
+				# venus
+				"geom": "inputs/sphere.obj",
+				"pos": [108.42e9, 0, 0],
+				"vel": [0, 35021.6, 0],
+				"mass": 4.867e24,
+				"scale": 7e9, # scale is the only thing not to scale
+			},
+			{
+				# mercury
+				"geom": "inputs/sphere.obj",
+				"pos": [69.432e9, 0, 0],
+				"vel": [0, 47000, 0],
+				"mass": 3.285e23,
+				"scale": 4e9, # scale is the only thing not to scale
+			},
+		],
+	}
+}
