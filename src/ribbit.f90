@@ -68,7 +68,8 @@ module ribbit
 
 	type world_t
 
-		double precision :: grav_accel(ND)
+		double precision :: grav_accel(ND)  ! uniform grav accel
+		double precision :: grav_const      ! Newtonian constant of gravitation
 
 		type(body_t), allocatable :: bodies(:)
 		type(matl_t), allocatable :: matls (:)
@@ -461,6 +462,7 @@ function read_world(filename, permissive) result(w)
 
 	! Set world defaults
 	w%grav_accel = 0.d0
+	w%grav_const = 0.d0
 	w%ground_pos = 0.d0
 	w%ground_nrm = [0, 0, 1]
 	w%has_ground = .false.
@@ -488,6 +490,9 @@ function read_world(filename, permissive) result(w)
 	case ("grav_accel")
 		w%grav_accel = get_array(json, p, ND)
 		!print *, "grav_accel = ", w%grav_accel
+
+	case ("grav_const")
+		call json%get(p, "@", w%grav_const)
 
 	case ("ground_pos")
 		w%has_ground = .true.
@@ -898,7 +903,7 @@ subroutine ribbit_run(w, dump_csv_)
 
 		call dump_csv             (w, dump_csv_, fid)
 		call cache_bodies         (w)
-		! TODO: add a sum_force() fn to iterate on body pairs
+		call sum_force_bodies     (w)
 		call update_bodies        (w)
 		call collide_ground_bodies(w)
 		call collide_bodies       (w)
@@ -1007,21 +1012,85 @@ end subroutine cache_body
 
 !===============================================================================
 
+subroutine sum_force_bodies(w)
+	type(world_t), intent(inout) :: w
+	!********
+	integer :: ia, ib
+
+	do ib = 1, size(w%bodies)
+		call init_force(w, w%bodies(ib))
+
+		! Iterate over unique pairs of bodies.  Note that this is different from
+		! the loop in collide_bodies()
+		do ia = 1, ib - 1
+		!do ia = 1, size(w%bodies)
+			call add_force(w, w%bodies(ia), w%bodies(ib))
+		end do
+
+	end do
+
+end subroutine sum_force_bodies
+
+!===============================================================================
+
+subroutine init_force(w, b)
+
+	type(world_t), intent(in) :: w
+	type(body_t), intent(inout) :: b
+
+	b%force = 0.d0
+	b%force = b%force + b%mass * w%grav_accel
+
+end subroutine init_force
+
+!===============================================================================
+
+subroutine add_force(w, a, b)
+
+	type(world_t), intent(in) :: w
+	type(body_t), intent(inout) :: a, b
+
+	!********
+
+	double precision :: apos(ND), bpos(ND)
+	double precision :: f(ND), r(ND), r2
+
+	!grav_const = 6.6743015d-11  ! actual value (N-m^2/kg^2)
+	!grav_const = 6.6743015d-4
+
+	!! 1st order approximation
+	!apos = a%pos
+	!bpos = b%pos
+
+	! Better approximation:  I think this is called the "midpoint method".  You
+	! could do even better, e.g. with Runge-Kutta
+	apos = a%pos + 0.5 * w%dt * a%vel
+	bpos = b%pos + 0.5 * w%dt * b%vel
+
+	r = bpos - apos
+
+	!f = g * m1 * m2 / r**2
+	f = w%grav_const * a%mass * b%mass / dot_product(r, r) * normalize(r)
+	print *, "f = ", f
+
+	a%force = a%force + f
+	b%force = b%force - f
+
+end subroutine add_force
+
+!===============================================================================
+
 subroutine update_body(w, b)
 
 	! Update the pose of body `b` due to its linear and angular velocity, and
 	! update its velocity due to net force, e.g. gravitational acceleration
 
-	type(world_t), intent(inout) :: w
+	type(world_t), intent(in) :: w
 	type(body_t), intent(inout) :: b
 
 	!********
 
 	double precision :: accel(ND)
-
-	! Sum forces.  TODO: move to sum_force()
-	b%force = 0.d0
-	b%force = b%force + b%mass * w%grav_accel
 
 	accel = b%force / b%mass
 	b%vel = b%vel0 + accel * w%dt

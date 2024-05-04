@@ -1,0 +1,35 @@
+{
+	"world":
+	{
+		#"grav_accel": [0, 0, -9.807],  # m/s^2
+		#"grav_const": 6.6743015d-11,   # actual value (N-m^2/kg^2)
+		"grav_const": 6.6743015d-4,     # for testing
+		"t_start": 0,
+		"t_end"  : 50.0, # s
+		"dt": 0.05,
+		#"ground_nrm": [0.08, 0.0, 0.9],
+		"bodies":
+		[
+			{
+				"geom": "inputs/sphere.obj",
+				"pos": [-2.0, 0, 0],
+				"vel": [0, -1, 0],
+				"matl": 1
+			},
+			{
+				"geom": "inputs/sphere.obj",
+				"pos": [2.0, 0, 0],
+				"vel": [0, 1, 0],
+				"matl": 1
+			},
+		],
+		"matls":
+		[
+			{
+				"coef_rest": 0.74,
+				"friction_dyn": 0.15,
+				"dens": 2500.0 # kg/m^3
+			}
+		]
+	}
+}
