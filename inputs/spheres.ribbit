@@ -4,8 +4,9 @@
 		"grav_accel": [0, 0, -9.807],  # m/s^2
 		"t_start": 0,
 		"t_end"  : 5.0, # s
-		"dt": 0.01,
+		"dt": 0.11,
 		"ground_nrm": [0.08, 0.0, 0.9],
+		#"ground_pos": [0, 0, 0],
 		"bodies":
 		[
 			{
@@ -20,7 +21,7 @@
 				"geom": "inputs/sphere.obj",
 				"pos": [0, 2.2, 2],
 				#"ang": [0, 0, 0],
-				"ang_vel": [0, -30, 0],
+				"ang_vel": [0, -90, 0],
 				"matl": 1
 			},
 		],

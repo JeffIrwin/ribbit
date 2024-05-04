@@ -718,13 +718,32 @@ subroutine tri_line(a, b, c, e, f, p, stat)
 
 	!********
 
-	double precision :: t, bu, bv, bw
+	double precision :: t, bu, bv, bw, min_tri, min_lin, max_tri, max_lin
 	double precision :: u(ND), v(ND), ef(ND), params(4)
 	double precision :: mat(ND, ND), rhs(ND, 1)
 	double precision, allocatable :: lhs(:,:)
 	double precision :: line_tol
 
-	integer :: io
+	integer :: i, io
+
+	! Check bounding boxes first.  For two spheres with ~1000 triangles, this is
+	! about 10 times faster than unconditionally doing the linear algebra
+	do i = 1, ND
+
+		min_tri = min(a(i), b(i), c(i))
+		max_tri = max(a(i), b(i), c(i))
+
+		min_lin = min(e(i), f(i))
+		max_lin = max(e(i), f(i))
+
+		! TODO: include tol?
+		if (max_lin < min_tri .or. &
+			max_tri < min_lin) then
+			stat = -3
+			return
+		end if
+
+	end do
 
 	! Vectors along the triangle's edges
 	u = b - a
@@ -859,10 +878,12 @@ subroutine ribbit_run(w, dump_csv_)
 
 	w%t = w%t_start
 	w%it = 0
+	call init_bodies(w)
+	call write_step(w)
 	do while (w%t <= w%t_end)
 
 		!print *, "t, z = ", w%t, w%bodies(1)%pos(3)
-		!print *, "w%it = ", w%it
+		print *, "w%it = ", w%it
 
 		call dump_csv             (w, dump_csv_, fid)
 		call cache_bodies         (w)
@@ -870,9 +891,10 @@ subroutine ribbit_run(w, dump_csv_)
 		call collide_ground_bodies(w)
 		call collide_bodies       (w)
 
-		call write_step(w)
 		w%it = w%it + 1
 		w%t  = w%t  + w%dt
+		call write_step(w)
+
 	end do
 	call write_case(w)
 
@@ -901,6 +923,16 @@ subroutine dump_csv(w, dump_csv_, fid)
 	write(fid, *)
 
 end subroutine dump_csv
+
+!===============================================================================
+
+subroutine init_bodies(w)
+	type(world_t), intent(inout) :: w
+	integer :: ib
+	do ib = 1, size(w%bodies)
+		call update_vertices(w%bodies(ib))
+	end do
+end subroutine init_bodies
 
 !===============================================================================
 
@@ -1150,6 +1182,8 @@ subroutine collide_body_pair(w, a, b)
 
 	! Iterate through each edge of body `a` and get the average position `r` and
 	! normal `nrm` of the collision point in the global coordinate system
+	!
+	! TODO: parallelize
 	r   = 0.d0
 	nrm = 0.d0
 	nr  = 0
@@ -1653,7 +1687,7 @@ subroutine write_case(w)
 	write(fid, "(a)") "time values:"
 
 	! TODO: write actual times
-	write(fid, "(es16.6)") [(dble(i), i = 1, w%it)]
+	write(fid, "(es16.6)") [(dble(i), i = 0, w%it)]
 
 	close(fid)
 	write(*,*) fg_bright_magenta//"finished writing file """// &
