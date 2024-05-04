@@ -57,6 +57,9 @@ module ribbit
 		! previous state
 		double precision :: pos0(ND), vel0(ND), rot0(ND, ND)
 
+		! Bounding box.  Could be in geom instead of body
+		double precision :: box(ND,2)
+
 	end type body_t
 
 	!********
@@ -1167,19 +1170,27 @@ subroutine collide_body_pair(w, a, b)
 		r(ND), r1(ND), r2(ND), nrm(ND), vp1(ND), vp2(ND), vr(ND), m1, m2, &
 		i1(ND,ND), i2(ND,ND), fe1(ND), fe2(ND), tng(ND), i1_r1_nrm(ND), &
 		i1_r1_tng(ND), i2_r2_nrm(ND), i2_r2_tng(ND), e, impulse_nrm, impulse_tng, &
-		friction_dyn, impulse_max, nrm_(ND)
+		friction_dyn, impulse_max, nrm_(ND), box_tol
 	double precision :: rhs(ND,2)
 	double precision, allocatable :: tmp(:,:)
 
-	integer :: stat, ita, ie, iva1, iva2, itb, ivb1, ivb2, ivb3, nr
+	integer :: stat, i, ita, ie, iva1, iva2, itb, ivb1, ivb2, ivb3, nr
 
 	!print *, "starting collide_body_pair()"
 	!print *, "a%pos = ", a%pos
 	!print *, "b%pos = ", b%pos
 	!print *, ""
 
-	! TODO: return early if bbox check passes.  Need to set and cache bbox first
-	! (in update_vertices()?)
+	! Return early if bounding box check passes.  Box is cached in
+	! update_vertices()
+	box_tol = 0.01
+	do i = 1, ND
+		! TODO: make box_tol a percentage instead of absolute
+		if (a%box(i,2) < b%box(i,1) - box_tol .or. &
+			b%box(i,2) < a%box(i,1) - box_tol) then
+			return
+		end if
+	end do
 
 	! Iterate through each edge of body `a` and get the average position `r` and
 	! normal `nrm` of the collision point in the global coordinate system
@@ -1637,6 +1648,8 @@ subroutine update_vertices(b)
 
 	!********
 
+	integer :: i
+
 	! Rotate first and then translate by com position
 
 	!print *, "rotating"
@@ -1646,9 +1659,14 @@ subroutine update_vertices(b)
 	b%geom%v = matmul(b%rot, b%geom%v0)
 
 	!print *, "translating"
-	b%geom%v(1,:) = b%geom%v(1,:) + b%pos(1)
-	b%geom%v(2,:) = b%geom%v(2,:) + b%pos(2)
-	b%geom%v(3,:) = b%geom%v(3,:) + b%pos(3)
+	do i = 1, ND
+		b%geom%v(i,:) = b%geom%v(i,:) + b%pos(i)
+	end do
+
+	do i = 1, ND
+		b%box(i,1) = minval(b%geom%v(i,:))
+		b%box(i,2) = maxval(b%geom%v(i,:))
+	end do
 
 	!print *, "done"
 

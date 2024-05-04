@@ -1,12 +1,11 @@
 {
 	"world":
 	{
-		"grav_accel": [0, 0, -9.807],  # m/s^2
+		#"grav_accel": [0, 0, -9.807],  # m/s^2
 		"t_start": 0,
-		"t_end"  : 5.0, # s
+		"t_end"  : 15.0, # s
 		"dt": 0.02,
-		"ground_nrm": [0.08, 0.0, 0.9],
-		#"ground_pos": [0, 0, 0],
+		#"ground_nrm": [0.08, 0.0, 0.9],
 		"bodies":
 		[
 			{
@@ -14,13 +13,15 @@
 				"pos": [0, 0, 2],
 				#"ang": [0, 0, 0],
 				#"ang_vel": [0, 0, 0],
+				"vel": [0, 0.4, 0],
 				"matl": 1
 			},
 			{
 				"geom": "inputs/sphere.obj",
 				"pos": [0, 3.2, 2],
 				#"ang": [0, 0, 0],
-				"ang_vel": [0, -90, 0],
+				"ang_vel": [90, 0, 0],
+				"vel": [0, -0.8, 0],
 				"matl": 1
 			},
 		],
