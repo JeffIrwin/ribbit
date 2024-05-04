@@ -43,6 +43,9 @@ module ribbit
 		type(geom_t) :: geom
 		integer :: matl  ! index of world%matls(:) array
 
+		! TODO: add a "mass" member to body. Might be more convenient than
+		! density for planetary models
+
 		double precision :: scale
 
 		double precision :: pos(ND)
@@ -1071,7 +1074,8 @@ subroutine add_force(w, a, b)
 
 	!f = g * m1 * m2 / r**2
 	f = w%grav_const * a%mass * b%mass / dot_product(r, r) * normalize(r)
-	print *, "f = ", f
+
+	!print *, "f = ", f
 
 	a%force = a%force + f
 	b%force = b%force - f
