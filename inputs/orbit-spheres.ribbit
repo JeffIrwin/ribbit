@@ -3,33 +3,31 @@
 	{
 		"grav_const": 6.6743015d-11,   # actual value (N-m^2/kg^2)
 		"t_start": 0,
-		"t_end"  : 1.d5, # s
+		"t_end"  : 2.0d6, # s
 		"dt": 1.d2,
 		"bodies":
 		[
 			{
 				"geom": "inputs/sphere.obj",
-				"pos": [-2.0, 0, 0],
-				"vel": [0, -8.64e-5, 0],
+				"pos": [0.0, 0, 0],
+				"vel": [0, -8.64e-5, -8.64e-5],
 				#"vel": [0, 0, 0],
-				"matl": 1
+				"mass": 8346.0,
 			},
 			{
 				"geom": "inputs/sphere.obj",
 				"scale": 0.6,
-				"pos": [1.5, 0, 0],
+				"pos": [0, 5.5, 0],
+				"vel": [0, 0, 4d-4],
+				"mass": 1803.0,
+			},
+			{
+				"geom": "inputs/sphere.obj",
+				"scale": 0.6,
+				"pos": [3.5, 0, 0],
 				"vel": [0, 4d-4, 0],
-				"matl": 1
+				"mass": 1803.0,
 			},
 		],
-		"matls":
-		[
-			{
-				"dens": 2000.0 # kg/m^3
-			},
-			{
-				"dens": 3000.0 # kg/m^3
-			},
-		]
 	}
 }

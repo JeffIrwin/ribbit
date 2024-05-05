@@ -4,7 +4,7 @@
 		"grav_const": 6.6743015d-11,   # actual value (N-m^2/kg^2)
 		"t_start": 0,
 		"t_end"  : 1.d8, # s
-		"dt": 3.d5,
+		"dt": 9.d5,
 		"bodies":
 		[
 			{

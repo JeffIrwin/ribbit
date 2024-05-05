@@ -62,6 +62,8 @@ module ribbit
 
 		double precision :: force(ND)  ! net force *on* the body
 
+		!double precision :: acc(ND)  ! acceleration (unused)
+
 	end type body_t
 
 	!********
@@ -364,6 +366,8 @@ subroutine get_inertia(b, w)
 	b%geom%v0 = b%geom%v
 
 	b%mass = dens * b%vol
+
+	!b%acc = 0.d0
 
 	write(*,*) "vol  = ", b%vol
 	write(*,*) "com  = ", com
@@ -906,8 +910,7 @@ subroutine ribbit_run(w, dump_csv_)
 	call init_bodies(w)
 	call write_step(w)
 
-	! TODO: run an initial check to see if bodies are already colliding
-	! initially.  Panic?
+	! TODO: run an initial check to see if bodies are already colliding. Panic?
 
 	do while (w%t <= w%t_end)
 
@@ -1079,6 +1082,10 @@ subroutine add_force(w, a, b)
 	apos = a%pos + 0.5 * w%dt * a%vel
 	bpos = b%pos + 0.5 * w%dt * b%vel
 
+	!! This is actually worse :(
+	!apos = a%pos + 0.5 * w%dt * a%vel + 0.25 * (w%dt ** 2) * a%acc
+	!bpos = b%pos + 0.5 * w%dt * b%vel + 0.25 * (w%dt ** 2) * b%acc
+
 	r = bpos - apos
 
 	!f = g * m1 * m2 / r**2
@@ -1105,6 +1112,7 @@ subroutine update_body(w, b)
 
 	double precision :: accel(ND)
 
+	!b%acc = b%force / b%mass
 	accel = b%force / b%mass
 	b%vel = b%vel0 + accel * w%dt
 
@@ -1456,8 +1464,8 @@ subroutine collide_body_pair(w, a, b)
 		                 cross(i2_r2_nrm, r2)))
 	!print *, "impulse_nrm = ", impulse_nrm
 
-	! TODO: if the `e` fudge factor is changed, make sure to change the
-	! body-to-ground case too
+	! If the `e` fudge factor is changed, make sure to change the body-to-ground
+	! case too
 	!impulse_tng = -e * dot_product(vr, tng) / &
 	!impulse_tng = -(1.d0 + e) * dot_product(vr, tng) / &
 	impulse_tng = -dot_product(vr, tng) / &
