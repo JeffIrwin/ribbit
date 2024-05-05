@@ -8,14 +8,6 @@
 		"bodies":
 		[
 			{
-				# sun
-				"geom": "inputs/sphere.obj",
-				"pos": [0, 0, 0],
-				"vel": [0, 0, 0],
-				"mass": 1.989e30,
-				"scale": 20e9, # scale is the only thing not to scale
-			},
-			{
 				# earth
 				"geom": "inputs/sphere.obj",
 				"pos": [150.88e9, 0, 0],
@@ -38,6 +30,14 @@
 				"vel": [0, 47000, 0],
 				"mass": 3.285e23,
 				"scale": 4e9, # scale is the only thing not to scale
+			},
+			{
+				# sun
+				"geom": "inputs/sphere.obj",
+				"pos": [0, 0, 0],
+				"vel": [0, 0, 0],
+				"mass": 1.989e30,
+				"scale": 20e9, # scale is the only thing not to scale
 			},
 		],
 	}

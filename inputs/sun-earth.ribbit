@@ -4,9 +4,18 @@
 		"grav_const": 6.6743015d-11,   # actual value (N-m^2/kg^2)
 		"t_start": 0,
 		"t_end"  : 1.d8, # s
-		"dt": 3.d5,
+		"dt": 3.d6,
 		"bodies":
 		[
+			{
+				# earth
+				"geom": "inputs/sphere.obj",
+				"scale": 0.6,
+				"pos": [150.88e9, 0, 0],
+				"vel": [0, 29784.8, 0],
+				"mass": 5.972e24,
+				"scale": 10e9, # scale is the only thing not to scale
+			},
 			{
 				# sun
 				"geom": "inputs/sphere.obj",
@@ -14,14 +23,6 @@
 				"vel": [0, 0, 0],
 				"mass": 1.989e30,
 				"scale": 20e9, # scale is the only thing not to scale
-			},
-			{
-				"geom": "inputs/sphere.obj",
-				"scale": 0.6,
-				"pos": [150.88e9, 0, 0],
-				"vel": [0, 29784.8, 0],
-				"mass": 5.972e24,
-				"scale": 10e9, # scale is the only thing not to scale
 			},
 		],
 	}
