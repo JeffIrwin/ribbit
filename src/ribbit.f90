@@ -45,7 +45,7 @@ module ribbit
 
 		double precision :: scale
 
-		double precision :: pos(ND), dpos(ND)
+		double precision :: pos(ND)
 		double precision :: vel(ND)
 
 		double precision :: rot(ND, ND)
@@ -1054,8 +1054,6 @@ subroutine init_force(w, b)
 	b%force = 0.d0
 	b%force = b%force + b%mass * w%grav_accel
 
-	b%dpos = 0.d0
-
 end subroutine init_force
 
 !===============================================================================
@@ -1070,116 +1068,26 @@ subroutine add_force(w, a, b)
 	double precision :: apos(ND), bpos(ND)
 	double precision :: f(ND), r(ND), r2
 
-	double precision :: g, m, dt, r0(ND), avel(ND), bvel(ND), davel(ND), dbvel(ND)
-	!double precision :: k1r, k2r, k3r, k4r, k1v, k2v, k3v, k4v
-	double precision :: &
-		k1r(ND), k2r(ND), k3r(ND), k4r(ND), &
-		k1v(ND), k2v(ND), k3v(ND), k4v(ND)
-
 	if (w%grav_const == 0) return
 
 	!! 1st order approximation
 	!apos = a%pos
 	!bpos = b%pos
 
-	!! Better approximation:  I think this is called the "midpoint method"
+	! Better approximation:  I think this is called the "midpoint method".  You
+	! could do even better, e.g. with Runge-Kutta
 	apos = a%pos + 0.5 * w%dt * a%vel
 	bpos = b%pos + 0.5 * w%dt * b%vel
 
-	!------------------------
-	! Runge-Kutta-4 (RK4)
+	r = bpos - apos
 
-	g = w%grav_const
-	dt = w%dt  ! aka `h`
-
-	! f = accel * mass
-	! accel = f / mass
-	! accel = g * m? / dot_product(r, r) * normalize(r)
-
-
-	!********
-	! Integrate body a's position
-	r0 = a%pos - b%pos
-	!r0 = b%pos - a%pos
-
-	! Acceleration of `a` depends on mass of `b`
-	m = b%mass
-
-	r = r0
-	k1r = a%vel
-	k1v = -g * m / dot_product(r, r) * normalize(r)
-
-	r = r0 + 0.5d0 * dt * k1r
-	k2r =    0.5d0 * dt * k1v + a%vel
-	k2v = -g * m / dot_product(r, r) * normalize(r)
-
-	r = r0 + 0.5d0 * dt * k2r
-	k3r =    0.5d0 * dt * k2v + a%vel
-	k3v = -g * m / dot_product(r, r) * normalize(r)
-
-	r = r0 +         dt * k3r
-	k4r =            dt * k3v + a%vel
-	k4v = -g * m / dot_product(r, r) * normalize(r)
-
-	!apos = a%pos + dt / 6.d0 * (k1r + 2.d0 * k2r + 2.d0 * k3r + k4r)
-	a%dpos = a%dpos + dt / 6.d0 * (k1r + 2.d0 * k2r + 2.d0 * k3r + k4r)
-	!apos = a%pos + dt / 12.d0 * (k1r + 2.d0 * k2r + 2.d0 * k3r + k4r)
-
-	davel = dt / 6.d0 * (k1v + 2.d0 * k2v + 2.d0 * k3v + k4v)
-	avel = a%vel + davel
-	apos = a%pos + 0.5d0 * dt * avel
-
-	!print "(a,3es16.6)", "a%pos = ", a%pos
-	!print "(a,3es16.6)", "apos  = ", apos
-
-	!********
-	! Integrate body b's position.  Might be able to delete half this code by
-	! doubling the loop bound in sum_force_bodies()
-	r0 = b%pos - a%pos
-
-	! Acceleration of `b` depends on mass of `a`
-	m = a%mass
-
-	r = r0
-	k1r = b%vel
-	k1v = -g * m / dot_product(r, r) * normalize(r)
-
-	r = r0 + 0.5d0 * dt * k1r
-	k2r =    0.5d0 * dt * k1v + b%vel
-	k2v = -g * m / dot_product(r, r) * normalize(r)
-
-	r = r0 + 0.5d0 * dt * k2r
-	k3r =    0.5d0 * dt * k2v + b%vel
-	k3v = -g * m / dot_product(r, r) * normalize(r)
-
-	r = r0 +         dt * k3r
-	k4r =            dt * k3v + b%vel
-	k4v = -g * m / dot_product(r, r) * normalize(r)
-
-	!bpos = b%pos + dt / 6.d0 * (k1r + 2.d0 * k2r + 2.d0 * k3r + k4r)
-	b%dpos = b%dpos + dt / 6.d0 * (k1r + 2.d0 * k2r + 2.d0 * k3r + k4r)
-	!bpos = b%pos + dt / 12.d0 * (k1r + 2.d0 * k2r + 2.d0 * k3r + k4r)
-
-	dbvel = dt / 6.d0 * (k1v + 2.d0 * k2v + 2.d0 * k3v + k4v)
-	bvel = b%vel + dbvel
-	bpos = b%pos + 0.5d0 * dt * bvel
-
-	!------------------------
-
-	!r = bpos - apos
-	!!f = g * m1 * m2 / r**2
-	!f = w%grav_const * a%mass * b%mass / dot_product(r, r) * normalize(r)
-
-	! f = m * a = m * dv / dt
-
-	!f =  a%mass * davel / dt
-	!f = -b%mass * dbvel / dt
-	!f = 0.5 * (a%mass * davel - b%mass * dbvel) / dt
+	!f = g * m1 * m2 / r**2
+	f = w%grav_const * a%mass * b%mass / dot_product(r, r) * normalize(r)
 
 	!print *, "f = ", f
 
-	a%force = a%force + a%mass * davel / dt
-	b%force = b%force + b%mass * dbvel / dt
+	a%force = a%force + f
+	b%force = b%force - f
 
 end subroutine add_force
 
@@ -1200,8 +1108,7 @@ subroutine update_body(w, b)
 	accel = b%force / b%mass
 	b%vel = b%vel0 + accel * w%dt
 
-	!b%pos = b%pos0 + 0.5 * (b%vel0 + b%vel) * w%dt
-	b%pos = b%pos0 + b%dpos
+	b%pos = b%pos0 + 0.5 * (b%vel0 + b%vel) * w%dt
 
 	! Update rotations by multiplying by a rotation matrix, not by
 	! adding vec3's!
