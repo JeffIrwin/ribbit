@@ -60,9 +60,8 @@ module ribbit
 		! Bounding box.  Could be in geom instead of body
 		double precision :: box(ND,2)
 
-		double precision :: force(ND)  ! net force *on* the body
-
-		!double precision :: acc(ND)  ! acceleration (unused)
+		!double precision :: force(ND)  ! net force *on* the body
+		double precision :: acc(ND)
 
 	end type body_t
 
@@ -919,7 +918,7 @@ subroutine ribbit_run(w, dump_csv_)
 
 		call dump_csv             (w, dump_csv_, fid)
 		call cache_bodies         (w)
-		call sum_force_bodies     (w)
+		call sum_acc_bodies       (w)
 		call update_bodies        (w)
 		call collide_ground_bodies(w)
 		call collide_bodies       (w)
@@ -1028,40 +1027,40 @@ end subroutine cache_body
 
 !===============================================================================
 
-subroutine sum_force_bodies(w)
+subroutine sum_acc_bodies(w)
 	type(world_t), intent(inout) :: w
 	!********
 	integer :: ia, ib
 
 	do ib = 1, size(w%bodies)
-		call init_force(w, w%bodies(ib))
+		call init_acc(w, w%bodies(ib))
 
 		! Iterate over unique pairs of bodies.  Note that this is different from
 		! the loop in collide_bodies()
 		do ia = 1, ib - 1
 		!do ia = 1, size(w%bodies)
-			call add_force(w, w%bodies(ia), w%bodies(ib))
+			call add_acc(w, w%bodies(ia), w%bodies(ib))
 		end do
 
 	end do
 
-end subroutine sum_force_bodies
+end subroutine sum_acc_bodies
 
 !===============================================================================
 
-subroutine init_force(w, b)
+subroutine init_acc(w, b)
 
 	type(world_t), intent(in) :: w
 	type(body_t), intent(inout) :: b
 
-	b%force = 0.d0
-	b%force = b%force + b%mass * w%grav_accel
+	b%acc = 0.d0
+	b%acc = b%acc + w%grav_accel
 
-end subroutine init_force
+end subroutine init_acc
 
 !===============================================================================
 
-subroutine add_force(w, a, b)
+subroutine add_acc(w, a, b)
 
 	type(world_t), intent(in) :: w
 	type(body_t), intent(inout) :: a, b
@@ -1069,7 +1068,7 @@ subroutine add_force(w, a, b)
 	!********
 
 	double precision :: apos(ND), bpos(ND)
-	double precision :: f(ND), r(ND), r2
+	double precision :: f(ND), r(ND), r2, f_dens(ND)
 
 	if (w%grav_const == 0) return
 
@@ -1089,14 +1088,15 @@ subroutine add_force(w, a, b)
 	r = bpos - apos
 
 	!f = g * m1 * m2 / r**2
-	f = w%grav_const * a%mass * b%mass / dot_product(r, r) * normalize(r)
+	!f = w%grav_const * a%mass * b%mass / dot_product(r, r) * normalize(r)
+	f_dens = w%grav_const / dot_product(r, r) * normalize(r)
 
 	!print *, "f = ", f
 
-	a%force = a%force + f
-	b%force = b%force - f
+	a%acc = a%acc + f_dens * b%mass
+	b%acc = b%acc - f_dens * a%mass
 
-end subroutine add_force
+end subroutine add_acc
 
 !===============================================================================
 
@@ -1113,7 +1113,9 @@ subroutine update_body(w, b)
 	double precision :: accel(ND)
 
 	!b%acc = b%force / b%mass
-	accel = b%force / b%mass
+	!accel = b%force / b%mass
+	accel = b%acc
+
 	b%vel = b%vel0 + accel * w%dt
 
 	b%pos = b%pos0 + 0.5 * (b%vel0 + b%vel) * w%dt
@@ -1192,7 +1194,7 @@ subroutine collide_ground_body(w, b)
 	i1 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
 
 	! Net force acting on body
-	fe = b%force
+	fe = b%acc * b%mass
 
 	! Tangent vector
 	if (abs(dot_product(normalize(vr), nrm)) > tol) then
@@ -1401,8 +1403,8 @@ subroutine collide_body_pair(w, a, b)
 	i2 = matmul(matmul(b%rot, b%inertia), transpose(b%rot))
 
 	! Net force acting on bodies
-	fe1 = a%force
-	fe2 = b%force
+	fe1 = a%acc * a%mass
+	fe2 = b%acc * b%mass
 	!print *, "fe = ", fe
 
 	! Tangent vector
