@@ -918,8 +918,11 @@ subroutine ribbit_run(w, dump_csv_)
 
 		call dump_csv             (w, dump_csv_, fid)
 		call cache_bodies         (w)
-		call sum_acc_bodies       (w)
+
+		!call sum_acc_bodies       (w)
+		call integrate_bodies     (w)
 		call update_bodies        (w)
+
 		call collide_ground_bodies(w)
 		call collide_bodies       (w)
 
@@ -1047,6 +1050,79 @@ subroutine sum_acc_bodies(w)
 end subroutine sum_acc_bodies
 
 !===============================================================================
+subroutine integrate_bodies(w)
+
+	! Integrate the equations of motion for Newtonian gravity using a symplectic
+	! integrator
+	!
+	!     https://en.wikipedia.org/wiki/Symplectic_integrator#Examples
+
+	type(world_t), intent(inout) :: w
+	!********
+	double precision, allocatable :: vel_coefs(:), acc_coefs(:)
+	integer :: i
+
+	! TODO: set coefs once per world? Or just pick an order and parameterize
+
+	! Ruth 1983 (3rd order)
+	vel_coefs = [1.d0, -2.d0/3.d0, 2.d0/3.d0]
+	acc_coefs = [-1.d0/24.d0, 3.d0/4.d0, 7.d0/24.d0]
+
+	do i = 1, size(vel_coefs)
+		call increment_pos_bodies(w, vel_coefs(i))
+		call sum_acc_bodies(w)
+		call increment_vel_bodies(w, acc_coefs(i))
+	end do
+
+end subroutine integrate_bodies
+
+!===============================================================================
+subroutine increment_vel_bodies(w, acc_coef)
+	type(world_t), intent(inout) :: w
+	double precision, intent(in) :: acc_coef
+
+	integer :: ib
+	do ib = 1, size(w%bodies)
+		call increment_vel_body(w, w%bodies(ib), acc_coef)
+	end do
+
+end subroutine increment_vel_bodies
+
+!********
+
+subroutine increment_vel_body(w, b, acc_coef)
+	type(world_t), intent(in) :: w
+	type(body_t), intent(inout) :: b
+	double precision, intent(in) :: acc_coef
+
+	b%vel = b%vel + acc_coef * b%acc * w%dt
+
+end subroutine increment_vel_body
+
+!===============================================================================
+
+subroutine increment_pos_bodies(w, vel_coef)
+	type(world_t), intent(inout) :: w
+	double precision, intent(in) :: vel_coef
+
+	integer :: ib
+	do ib = 1, size(w%bodies)
+		call increment_pos_body(w, w%bodies(ib), vel_coef)
+	end do
+
+end subroutine increment_pos_bodies
+
+!********
+
+subroutine increment_pos_body(w, b, vel_coef)
+	type(world_t), intent(in) :: w
+	type(body_t), intent(inout) :: b
+	double precision, intent(in) :: vel_coef
+
+	b%pos = b%pos + vel_coef * b%vel * w%dt
+
+end subroutine increment_pos_body
+!===============================================================================
 
 subroutine init_acc(w, b)
 
@@ -1068,18 +1144,20 @@ subroutine add_acc(w, a, b)
 	!********
 
 	double precision :: apos(ND), bpos(ND)
-	double precision :: f(ND), r(ND), r2, f_dens(ND)
+	double precision :: f(ND), r(ND), r2, force_dens(ND)
 
 	if (w%grav_const == 0) return
 
-	!! 1st order approximation
-	!apos = a%pos
-	!bpos = b%pos
+	! For symplectic integration, we want to use a "1st order approximation"
+	! here.  The fancy stuff comes in at a higher level in increment_pos* and
+	! increment_vel* fns
+	apos = a%pos
+	bpos = b%pos
 
-	! Better approximation:  I think this is called the "midpoint method".  You
-	! could do even better, e.g. with Runge-Kutta
-	apos = a%pos + 0.5 * w%dt * a%vel
-	bpos = b%pos + 0.5 * w%dt * b%vel
+	!! Better approximation:  I think this is called the "midpoint method".  You
+	!! could do even better, e.g. with Runge-Kutta
+	!apos = a%pos + 0.5 * w%dt * a%vel
+	!bpos = b%pos + 0.5 * w%dt * b%vel
 
 	!! This is actually worse :(
 	!apos = a%pos + 0.5 * w%dt * a%vel + 0.25 * (w%dt ** 2) * a%acc
@@ -1089,12 +1167,12 @@ subroutine add_acc(w, a, b)
 
 	!f = g * m1 * m2 / r**2
 	!f = w%grav_const * a%mass * b%mass / dot_product(r, r) * normalize(r)
-	f_dens = w%grav_const / dot_product(r, r) * normalize(r)
+	force_dens = w%grav_const / dot_product(r, r) * normalize(r)
 
 	!print *, "f = ", f
 
-	a%acc = a%acc + f_dens * b%mass
-	b%acc = b%acc - f_dens * a%mass
+	a%acc = a%acc + force_dens * b%mass
+	b%acc = b%acc - force_dens * a%mass
 
 end subroutine add_acc
 
@@ -1114,11 +1192,11 @@ subroutine update_body(w, b)
 
 	!b%acc = b%force / b%mass
 	!accel = b%force / b%mass
-	accel = b%acc
+	!accel = b%acc
 
-	b%vel = b%vel0 + accel * w%dt
-
-	b%pos = b%pos0 + 0.5 * (b%vel0 + b%vel) * w%dt
+	!! Position and velocity updates have been moved to integrate_bodies()
+	!b%vel = b%vel0 + accel * w%dt
+	!b%pos = b%pos0 + 0.5 * (b%vel0 + b%vel) * w%dt
 
 	! Update rotations by multiplying by a rotation matrix, not by
 	! adding vec3's!
