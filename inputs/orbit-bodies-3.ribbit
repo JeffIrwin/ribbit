@@ -3,32 +3,32 @@
 	{
 		"grav_const": 6.6743015d-11,   # actual value (N-m^2/kg^2)
 		"t_start": 0,
-		"t_end"  : 2.6d8, # s
-		"dt": 1.d5,
+		"t_end"  : 4.0d8, # s
+		"dt": 2.d5,
 		"bodies":
 		[
 			{
 				"geom": "inputs/sphere.obj",
 				"pos": [0, 0, 0],
-				"vel": [550, -500, 0],
+				"vel": [550, -500, 50],
 				"mass": 1e28,
-				"scale": 40e8, # scale is the only thing not to scale
+				"scale": 90e8, # scale is the only thing not to scale
 			},
 			{
 				"geom": "inputs/sphere.obj",
 				"scale": 0.6,
 				"pos": [160e9, 0, 0],
-				"vel": [20, 1000, 0],
+				"vel": [20, 1000, 50],
 				"mass": 5e27,
-				"scale": 20e8, # scale is the only thing not to scale
+				"scale": 50e8, # scale is the only thing not to scale
 			},
 			{
 				"geom": "inputs/sphere.obj",
 				"scale": 0.6,
 				"pos": [0, 160e9, 0],
-				"vel": [-1410, 0, 0],
+				"vel": [0, 0, -1360],
 				"mass": 5e27,
-				"scale": 20e8, # scale is the only thing not to scale
+				"scale": 50e8, # scale is the only thing not to scale
 			},
 		],
 	}

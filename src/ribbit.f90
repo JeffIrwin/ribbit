@@ -88,7 +88,8 @@ module ribbit
 		double precision  :: t   ! transient time value for current step
 		integer(kind = 8) :: it  ! time index
 
-		! Symplectic integrator constants
+		! Symplectic integrator constants.  TODO: add a json option to select
+		! the integrator order
 		double precision, allocatable :: vel_coefs(:), acc_coefs(:)
 
 	end type world_t
@@ -933,7 +934,7 @@ subroutine ribbit_run(w, dump_csv_)
 	do while (w%t <= w%t_end)
 
 		!print *, "t, z = ", w%t, w%bodies(1)%pos(3)
-		!print *, "w%it = ", w%it
+		print *, "w%it = ", w%it
 
 		call dump_csv             (w, dump_csv_, fid)
 		call cache_bodies         (w)
@@ -1834,20 +1835,43 @@ subroutine update_vertices(b)
 
 	!********
 
+	double precision, allocatable :: dummy(:,:)
 	integer :: i
 
 	! Rotate first and then translate by com position
 
 	!print *, "rotating"
 
-	! TODO: lapack dgemm().  This crashes on large data (e.g. homer.obj) when
-	! compiled without "-heap-arrays0" ifx option
-	b%geom%v = matmul(b%rot, b%geom%v0)
+	!! Lapack dgemm() is better than matmul.  This crashes on large data (e.g.
+	!! homer.obj) when compiled without "-heap-arrays0" ifx option, and it
+	!! crashes unconditionally on even larger data even with the heap arrays
+	!! option
+	!b%geom%v = matmul(b%rot, b%geom%v0)
+
+	!allocate(dummy( ND, b%geom%nv ))
+	!dummy = 0.d0
+	!b%geom%v = 0.d0
+
+	!b%geom%v(1,:) = b%pos(1)
+	!b%geom%v(2,:) = b%pos(2)
+	!b%geom%v(3,:) = b%pos(3)
+
+	do i = 1, b%geom%nv
+		b%geom%v(1,i) = b%pos(1)
+		b%geom%v(2,i) = b%pos(2)
+		b%geom%v(3,i) = b%pos(3)
+	end do
+
+	! Rotate and translate in one operation.  TODO: add wrapper like invmul()?
+	call dgemm("N", "N", ND, b%geom%nv, ND, 1.d0, b%rot, ND, b%geom%v0, ND, &
+		1.d0, b%geom%v, ND)
+	!b%geom%v = b%geom%v0
+	!dgemm (transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
 
 	!print *, "translating"
-	do i = 1, ND
-		b%geom%v(i,:) = b%geom%v(i,:) + b%pos(i)
-	end do
+	!do i = 1, ND
+	!	b%geom%v(i,:) = b%geom%v(i,:) + b%pos(i)
+	!end do
 
 	do i = 1, ND
 		b%box(i,1) = minval(b%geom%v(i,:))

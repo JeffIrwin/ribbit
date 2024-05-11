@@ -1,0 +1,45 @@
+{
+	"world":
+	{
+		"grav_const": 6.6743015d-11,   # actual value (N-m^2/kg^2)
+		"t_start": 0,
+		"t_end"  : 3.d8, # s
+		"dt": 1.d5,
+		"bodies":
+		[
+			{
+				# sun
+				"geom": "inputs/sphere.obj",
+				"pos": [0, 0, 0],
+				"vel": [0, 0, 0],
+				"mass": 1.989e30,
+				"scale": 20e9, # scale is the only thing not to scale
+			},
+			{
+				# earth
+				"geom": "inputs/sphere.obj",
+				"pos": [150.88e9, 0, 0],
+				"vel": [0, 29784.8, 0],
+				#"mass": 5.972e24,
+				"mass": 2.01e28,
+				"scale": 5e9, # scale is the only thing not to scale
+			},
+			{
+				# moon, visible in render scale
+				"geom": "inputs/sphere.obj",
+				"pos": [150.88e9, 14.0e9, 0],
+				"vel": [-8491.6, 30807, 0],
+				"mass": 7.34767309e22,
+				"scale": 2.0e9, # scale is the only thing not to scale
+			},
+			#{
+			#	# moon, actual pos and vel
+			#	"geom": "inputs/sphere.obj",
+			#	"pos": [1.512644e+11, 0, 0],
+			#	"vel": [0, 30807, 0],
+			#	"mass": 7.34767309e22,
+			#	"scale": 0.05e9, # scale is the only thing not to scale
+			#},
+		],
+	}
+}
