@@ -69,6 +69,9 @@ module ribbit
 
 	type world_t
 
+		! The world contains physical constants, initial conditions (within
+		! bodies), and also numerical settings
+
 		double precision :: grav_accel(ND)  ! uniform grav accel
 		double precision :: grav_const      ! Newtonian constant of gravitation
 
@@ -84,6 +87,9 @@ module ribbit
 
 		double precision  :: t   ! transient time value for current step
 		integer(kind = 8) :: it  ! time index
+
+		! Symplectic integrator constants
+		double precision, allocatable :: vel_coefs(:), acc_coefs(:)
 
 	end type world_t
 
@@ -674,11 +680,24 @@ subroutine init_world(w)
 
 	!********
 
+	double precision :: c14, c24, d14, d24
 	integer :: ib
 
 	do ib = 1, size(w%bodies)
 		call get_inertia(w%bodies(ib), w)
 	end do
+
+	!! Ruth 1983 (3rd order)
+	!w%vel_coefs = [1.d0, -2.d0/3.d0, 2.d0/3.d0]
+	!w%acc_coefs = [-1.d0/24.d0, 3.d0/4.d0, 7.d0/24.d0]
+
+	c14 = 1.d0 / (2.d0 * (2.d0 - 2.d0 ** (1.d0/3.d0)))
+	c24 = (1.d0 - 2.d0 ** (1.d0/3.d0)) / (2.d0 * (2.d0 - 2.d0 ** (1.d0/3.d0)))
+	d14 = 1.d0 / (2.d0 - 2.d0 ** (1.d0/3.d0))
+	d24 = -2.d0 ** (1.d0/3.d0) / (2.d0 - 2.d0 ** (1.d0/3.d0))
+
+	w%vel_coefs = [c14, c24, c24, c14 ]
+	w%acc_coefs = [d14, d24, d14, 0.d0]
 
 end subroutine init_world
 
@@ -1056,31 +1075,19 @@ subroutine integrate_bodies(w)
 	! integrator
 	!
 	!     https://en.wikipedia.org/wiki/Symplectic_integrator#Examples
+	!
+	! Runge-Kutta is harder to implement because you need an array of "k"
+	! coefficients (1 of each k for each body), and symplectic integrators are
+	! better for equations of motion anyway
 
 	type(world_t), intent(inout) :: w
 	!********
-	double precision :: c14, c24, d14, d24
-	double precision, allocatable :: vel_coefs(:), acc_coefs(:)
 	integer :: i
 
-	! TODO: set coefs once per world? Or just pick an order and parameterize
-
-	!! Ruth 1983 (3rd order)
-	!vel_coefs = [1.d0, -2.d0/3.d0, 2.d0/3.d0]
-	!acc_coefs = [-1.d0/24.d0, 3.d0/4.d0, 7.d0/24.d0]
-
-	c14 = 1.d0 / (2.d0 * (2.d0 - 2.d0 ** (1.d0/3.d0)))
-	c24 = (1.d0 - 2.d0 ** (1.d0/3.d0)) / (2.d0 * (2.d0 - 2.d0 ** (1.d0/3.d0)))
-	d14 = 1.d0 / (2.d0 - 2.d0 ** (1.d0/3.d0))
-	d24 = -2.d0 ** (1.d0/3.d0) / (2.d0 - 2.d0 ** (1.d0/3.d0))
-
-	vel_coefs = [c14, c24, c24, c14 ]
-	acc_coefs = [d14, d24, d14, 0.d0]
-
-	do i = 1, size(vel_coefs)
-		call increment_pos_bodies(w, vel_coefs(i))
+	do i = 1, size(w%vel_coefs)
+		call increment_pos_bodies(w, w%vel_coefs(i))
 		call sum_acc_bodies(w)
-		call increment_vel_bodies(w, acc_coefs(i))
+		call increment_vel_bodies(w, w%acc_coefs(i))
 	end do
 
 end subroutine integrate_bodies
