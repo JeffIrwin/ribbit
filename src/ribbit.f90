@@ -1059,14 +1059,23 @@ subroutine integrate_bodies(w)
 
 	type(world_t), intent(inout) :: w
 	!********
+	double precision :: c14, c24, d14, d24
 	double precision, allocatable :: vel_coefs(:), acc_coefs(:)
 	integer :: i
 
 	! TODO: set coefs once per world? Or just pick an order and parameterize
 
-	! Ruth 1983 (3rd order)
-	vel_coefs = [1.d0, -2.d0/3.d0, 2.d0/3.d0]
-	acc_coefs = [-1.d0/24.d0, 3.d0/4.d0, 7.d0/24.d0]
+	!! Ruth 1983 (3rd order)
+	!vel_coefs = [1.d0, -2.d0/3.d0, 2.d0/3.d0]
+	!acc_coefs = [-1.d0/24.d0, 3.d0/4.d0, 7.d0/24.d0]
+
+	c14 = 1.d0 / (2.d0 * (2.d0 - 2.d0 ** (1.d0/3.d0)))
+	c24 = (1.d0 - 2.d0 ** (1.d0/3.d0)) / (2.d0 * (2.d0 - 2.d0 ** (1.d0/3.d0)))
+	d14 = 1.d0 / (2.d0 - 2.d0 ** (1.d0/3.d0))
+	d24 = -2.d0 ** (1.d0/3.d0) / (2.d0 - 2.d0 ** (1.d0/3.d0))
+
+	vel_coefs = [c14, c24, c24, c14 ]
+	acc_coefs = [d14, d24, d14, 0.d0]
 
 	do i = 1, size(vel_coefs)
 		call increment_pos_bodies(w, vel_coefs(i))
