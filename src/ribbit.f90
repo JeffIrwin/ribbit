@@ -1060,7 +1060,6 @@ subroutine sum_acc_bodies(w)
 		! Iterate over unique pairs of bodies.  Note that this is different from
 		! the loop in collide_bodies()
 		do ia = 1, ib - 1
-		!do ia = 1, size(w%bodies)
 			call add_acc(w, w%bodies(ia), w%bodies(ib))
 		end do
 
@@ -1093,6 +1092,7 @@ subroutine integrate_bodies(w)
 end subroutine integrate_bodies
 
 !===============================================================================
+
 subroutine increment_vel_bodies(w, acc_coef)
 	type(world_t), intent(inout) :: w
 	double precision, intent(in) :: acc_coef
@@ -1138,6 +1138,7 @@ subroutine increment_pos_body(w, b, vel_coef)
 	b%pos = b%pos + vel_coef * b%vel * w%dt
 
 end subroutine increment_pos_body
+
 !===============================================================================
 
 subroutine init_acc(w, b)
@@ -1162,6 +1163,9 @@ subroutine add_acc(w, a, b)
 	double precision :: apos(ND), bpos(ND)
 	double precision :: f(ND), r(ND), r2, force_dens(ND)
 
+	! For perf, it might be better to move this to a `cycle` in
+	! sum_acc_bodies().  But if we generalize e.g. to electro forces too, it
+	! might be cleaner to have the checks here
 	if (w%grav_const == 0) return
 
 	! For symplectic integration, we want to use a "1st order approximation"
@@ -1170,19 +1174,8 @@ subroutine add_acc(w, a, b)
 	apos = a%pos
 	bpos = b%pos
 
-	!! Better approximation:  I think this is called the "midpoint method".  You
-	!! could do even better, e.g. with Runge-Kutta
-	!apos = a%pos + 0.5 * w%dt * a%vel
-	!bpos = b%pos + 0.5 * w%dt * b%vel
-
-	!! This is actually worse :(
-	!apos = a%pos + 0.5 * w%dt * a%vel + 0.25 * (w%dt ** 2) * a%acc
-	!bpos = b%pos + 0.5 * w%dt * b%vel + 0.25 * (w%dt ** 2) * b%acc
-
 	r = bpos - apos
 
-	!f = g * m1 * m2 / r**2
-	!f = w%grav_const * a%mass * b%mass / dot_product(r, r) * normalize(r)
 	force_dens = w%grav_const / dot_product(r, r) * normalize(r)
 
 	!print *, "f = ", f
@@ -1206,13 +1199,7 @@ subroutine update_body(w, b)
 
 	double precision :: accel(ND)
 
-	!b%acc = b%force / b%mass
-	!accel = b%force / b%mass
-	!accel = b%acc
-
-	!! Position and velocity updates have been moved to integrate_bodies()
-	!b%vel = b%vel0 + accel * w%dt
-	!b%pos = b%pos0 + 0.5 * (b%vel0 + b%vel) * w%dt
+	! Position and velocity updates have been moved to integrate_bodies()
 
 	! Update rotations by multiplying by a rotation matrix, not by
 	! adding vec3's!
