@@ -1203,7 +1203,7 @@ subroutine update_body(w, b)
 	! Position and velocity updates have been moved to integrate_bodies()
 
 	! Update rotations by multiplying by a rotation matrix, not by
-	! adding vec3's!
+	! adding vec3's!  Matmul is fine here for 3x3's.
 	b%rot = matmul(get_rot(b%ang_vel * w%dt), b%rot)
 
 	! Rounding errors might accumulate after many time steps.
